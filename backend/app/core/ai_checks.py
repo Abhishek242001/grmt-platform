@@ -26,14 +26,67 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
     Plain-text extraction for the grammar check. Uses PyMuPDF (fitz) — pure
     Python, no GPU, per master doc §3.8's note that PyMuPDF/pdfplumber are
     already the chosen library for PDF structure work elsewhere in the spec.
+
+    Raw PyMuPDF output is not directly LanguageTool-safe — see
+    _clean_extracted_text for the specific artifacts this strips before
+    grammar-checking (line-wrap hyphenation, the references section, and
+    stray whitespace), each confirmed against a real submitted paper during
+    manual testing (Phase 2 wiring) before this cleanup was added.
     """
     import fitz  # PyMuPDF — imported lazily so a missing dependency doesn't break unrelated imports
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
-        return "\n".join(page.get_text() for page in doc)
+        raw_text = "\n".join(page.get_text() for page in doc)
     finally:
         doc.close()
+    return _clean_extracted_text(raw_text)
+
+
+# Matches a references/bibliography section heading on its own line, case-
+# insensitive, with or without a numeral prefix (e.g. "7. References",
+# "REFERENCES", "Bibliography") — IEEE and most academic formats use one of
+# these as the final major section. Anchored to a whole line (not just a
+# substring) so a stray in-body mention of the word "references" doesn't
+# truncate the paper early.
+_REFERENCES_HEADING_RE = re.compile(r"^\s*(?:[IVXLC\d]+\.?\s*)?(references|bibliography)\s*$", re.IGNORECASE | re.MULTILINE)
+
+# A hyphen at the end of a PDF-rendered line, followed by a lowercase letter
+# continuing the word on the next line — the standard line-wrap hyphenation
+# pattern. Joining these prevents "auto-\nregressive" from being read as two
+# malformed words by LanguageTool. Deliberately requires a lowercase
+# continuation so a genuine end-of-sentence hyphen followed by a new
+# capitalized sentence isn't incorrectly joined.
+_LINE_WRAP_HYPHEN_RE = re.compile(r"(\w)-\n(\s*)([a-z])")
+
+
+def _clean_extracted_text(raw_text: str) -> str:
+    """
+    Three targeted fixes, confirmed necessary against a real submission
+    during manual testing:
+
+    1. De-hyphenate line-wrapped words ("auto-\\nregressive" -> "autoregressive").
+    2. Truncate at the references/bibliography section — author names and
+       foreign-language titles in a reference list are not the researcher's
+       own prose and shouldn't count toward their grammar score. Citation
+       completeness is GROBID's job (check_structure), not this check's.
+    3. Collapse stray single newlines (PDF line-wrap artifacts) into spaces
+       while preserving paragraph breaks (blank lines), since check_grammar's
+       chunking is paragraph-aware.
+    """
+    text = _LINE_WRAP_HYPHEN_RE.sub(r"\1\3", raw_text)
+
+    match = _REFERENCES_HEADING_RE.search(text)
+    if match:
+        text = text[: match.start()]
+
+    # Collapse single newlines (mid-paragraph PDF line wraps) to spaces, but
+    # keep double-newlines (real paragraph breaks) intact.
+    text = re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
 
 
 def check_grammar(text: str) -> dict:

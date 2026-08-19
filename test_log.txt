@@ -119,3 +119,124 @@
 [2026-08-19 18:21:38 UTC] [INFO] [backend] [4fec31fd] grammar check complete submission=f3d9723f-357e-4131-9a30-d833fda732f1 score=100.0
 [2026-08-19 18:21:38 UTC] [INFO] [backend] [4fec31fd] structure/citation check complete submission=f3d9723f-357e-4131-9a30-d833fda732f1 score=90.0
 [2026-08-19 18:21:38 UTC] [INFO] [backend] [4fec31fd] gate decision submission=f3d9723f-357e-4131-9a30-d833fda732f1 status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
+[2026-08-19 18:39:08 UTC] [INFO] [backend] [3ae159d4] user created id=651d428c-a545-474a-8a22-0b60e2b641c3 role=researcher
+[2026-08-19 18:39:08 UTC] [INFO] [backend] [7a1acecb] login success user_id=651d428c-a545-474a-8a22-0b60e2b641c3
+[2026-08-19 18:39:08 UTC] [INFO] [backend] [adf6b831] login success user_id=7239853b-c200-4d6e-af87-db486f9f5276
+[2026-08-19 18:39:09 UTC] [INFO] [backend] [9467427e] login success user_id=2a9303e9-4670-4692-af04-9ad5b58f0e16
+[2026-08-19 18:39:09 UTC] [INFO] [backend] [af60cedf] maintenance mode STARTED by user=2a9303e9-4670-4692-af04-9ad5b58f0e16
+[2026-08-19 18:39:09 UTC] [INFO] [backend] [ea9183aa] maintenance mode ENDED by user=2a9303e9-4670-4692-af04-9ad5b58f0e16
+[2026-08-19 18:39:09 UTC] [INFO] [backend] [1d49a9e6] user created id=b4f577f2-1268-4edd-88d1-7bd1d3971ec7 role=researcher
+[2026-08-19 18:39:09 UTC] [INFO] [backend] [4da729b6] login success user_id=b4f577f2-1268-4edd-88d1-7bd1d3971ec7
+[2026-08-19 18:39:10 UTC] [INFO] [backend] [aaca5ded] login success user_id=f469db27-d7bf-4e0d-94dd-2710a5224a59
+[2026-08-19 18:39:10 UTC] [INFO] [backend] [4f2f00b4] user created id=aa882882-e491-4e3f-a7ad-ff65a133659d role=researcher
+[2026-08-19 18:39:10 UTC] [INFO] [backend] [abd8353c] user created id=597cc978-73bf-4063-83be-41544a5075d6 role=researcher
+[2026-08-19 18:39:10 UTC] [WARN] [backend] [2554c43d] signup rejected: email already registered (dup@example.com)
+[2026-08-19 18:39:11 UTC] [INFO] [backend] [9f9aefcf] user created id=78efb076-6434-4714-b7fb-1ccc928a6b92 role=researcher
+[2026-08-19 18:39:11 UTC] [INFO] [backend] [78b0ac5d] login success user_id=78efb076-6434-4714-b7fb-1ccc928a6b92
+[2026-08-19 18:39:11 UTC] [INFO] [backend] [b1403d43] user created id=4028ee55-31e3-401f-bf62-328661f25342 role=researcher
+[2026-08-19 18:39:11 UTC] [WARN] [backend] [53383fdc] login failed for email=wrongpw@example.com
+[2026-08-19 18:39:11 UTC] [WARN] [backend] [a74f3522] login failed for email=nonexistent@example.com
+[2026-08-19 18:39:11 UTC] [INFO] [backend] [b5e98ea3] user created id=1e09632d-4f22-4510-9ba2-54e70032664b role=researcher
+[2026-08-19 18:39:12 UTC] [INFO] [backend] [1b8598d6] login success user_id=1e09632d-4f22-4510-9ba2-54e70032664b
+[2026-08-19 18:39:12 UTC] [INFO] [backend] [8c4254e2] token refreshed user_id=1e09632d-4f22-4510-9ba2-54e70032664b
+[2026-08-19 18:39:12 UTC] [INFO] [backend] [10d18fe7] user created id=c2ffe408-b496-47be-b79e-9ab591efed28 role=researcher
+[2026-08-19 18:39:12 UTC] [INFO] [backend] [995549bf] login success user_id=c2ffe408-b496-47be-b79e-9ab591efed28
+[2026-08-19 18:39:13 UTC] [INFO] [backend] [90e7b113] user created id=c3e71872-6596-48aa-8e63-ff64e4d568a6 role=researcher
+[2026-08-19 18:39:13 UTC] [INFO] [backend] [191641bf] login success user_id=c3e71872-6596-48aa-8e63-ff64e4d568a6
+[2026-08-19 18:39:13 UTC] [INFO] [backend] [ca62ee44] user created id=bba7c705-0033-4190-a67e-8ac23d21ae41 role=organizer
+[2026-08-19 18:39:13 UTC] [INFO] [backend] [2a064fe5] login success user_id=bba7c705-0033-4190-a67e-8ac23d21ae41
+[2026-08-19 18:39:13 UTC] [INFO] [backend] [682a73da] conference created id=345c6fee-0a99-41f1-8cbc-1b34ef7df6d2 organizer=bba7c705-0033-4190-a67e-8ac23d21ae41
+[2026-08-19 18:39:14 UTC] [INFO] [backend] [430b3c81] user created id=fadcc1c8-8fd2-4c67-b7ad-911296cea2c6 role=researcher
+[2026-08-19 18:39:14 UTC] [INFO] [backend] [e25c88fc] login success user_id=fadcc1c8-8fd2-4c67-b7ad-911296cea2c6
+[2026-08-19 18:39:14 UTC] [INFO] [backend] [5cc7a289] user created id=0b9df836-b9c1-4ec7-8afa-698cfd354b4a role=organizer
+[2026-08-19 18:39:14 UTC] [INFO] [backend] [759acc5b] login success user_id=0b9df836-b9c1-4ec7-8afa-698cfd354b4a
+[2026-08-19 18:39:14 UTC] [INFO] [backend] [4821810c] conference created id=b78bb7dc-0ac8-439d-a939-e5cc0b066bc7 organizer=0b9df836-b9c1-4ec7-8afa-698cfd354b4a
+[2026-08-19 18:39:14 UTC] [WARN] [backend] [bd456256] gate-rule update rejected for conference=b78bb7dc-0ac8-439d-a939-e5cc0b066bc7: 'ai_content_pct' cannot be a hard gate — see master build document §1.1/§1.4 and development_rule.md for why this is a fixed product constraint, not a configurable preference.
+[2026-08-19 18:39:14 UTC] [INFO] [backend] [89de5aec] user created id=0d8cbe35-bac3-4771-ad3d-17316e0e7c5f role=organizer
+[2026-08-19 18:39:15 UTC] [INFO] [backend] [954f7f88] login success user_id=0d8cbe35-bac3-4771-ad3d-17316e0e7c5f
+[2026-08-19 18:39:15 UTC] [INFO] [backend] [61841d1a] conference created id=b0933313-ef5f-4ed4-898c-53541188451c organizer=0d8cbe35-bac3-4771-ad3d-17316e0e7c5f
+[2026-08-19 18:39:15 UTC] [INFO] [backend] [b26974a4] gate rules updated for conference=b0933313-ef5f-4ed4-898c-53541188451c count=1
+[2026-08-19 18:39:15 UTC] [INFO] [backend] [99f268fe] user created id=ebf13ce9-dcd3-421d-9757-8edebac53e01 role=organizer
+[2026-08-19 18:39:15 UTC] [INFO] [backend] [42733699] login success user_id=ebf13ce9-dcd3-421d-9757-8edebac53e01
+[2026-08-19 18:39:16 UTC] [INFO] [backend] [2d9938c4] user created id=3f265636-03f1-4737-ae55-412eb6f2df85 role=organizer
+[2026-08-19 18:39:16 UTC] [INFO] [backend] [6a2cb858] login success user_id=3f265636-03f1-4737-ae55-412eb6f2df85
+[2026-08-19 18:39:16 UTC] [INFO] [backend] [f007dd90] conference created id=d20ba6f3-59cb-4562-bcb6-ff2e3a6abf5f organizer=3f265636-03f1-4737-ae55-412eb6f2df85
+[2026-08-19 18:39:16 UTC] [INFO] [backend] [4663a231] user created id=e01d841d-f06e-4b41-b415-8c0de9d9ad70 role=researcher
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [a8e537e9] login success user_id=e01d841d-f06e-4b41-b415-8c0de9d9ad70
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [0293d3e8] submission created id=ee6ffcff-02ec-4a5b-b570-4a63376a752e conference=d20ba6f3-59cb-4562-bcb6-ff2e3a6abf5f researcher=e01d841d-f06e-4b41-b415-8c0de9d9ad70
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [0293d3e8] grammar check complete submission=ee6ffcff-02ec-4a5b-b570-4a63376a752e score=100.0
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [0293d3e8] structure/citation check complete submission=ee6ffcff-02ec-4a5b-b570-4a63376a752e score=90.0
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [0293d3e8] gate decision submission=ee6ffcff-02ec-4a5b-b570-4a63376a752e status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [e0370fd7] user created id=07f73f78-7ad5-4239-9abd-58fdd8d7ae32 role=organizer
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [74ac5b5c] login success user_id=07f73f78-7ad5-4239-9abd-58fdd8d7ae32
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [df0ebb97] conference created id=00911b54-bfa2-4f94-9e7a-7c8af013deb7 organizer=07f73f78-7ad5-4239-9abd-58fdd8d7ae32
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [8f86e1dd] user created id=539bee16-8579-441a-bb17-119d8040f20b role=researcher
+[2026-08-19 18:39:17 UTC] [INFO] [backend] [e10f4bad] login success user_id=539bee16-8579-441a-bb17-119d8040f20b
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [a7d954b9] user created id=5d7b34bc-acf6-46b5-a9e7-37406e02f598 role=organizer
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [9ed97360] login success user_id=5d7b34bc-acf6-46b5-a9e7-37406e02f598
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [02e9e7cd] conference created id=9ea146f3-0e75-4869-9009-111177be772f organizer=5d7b34bc-acf6-46b5-a9e7-37406e02f598
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [d903ef0f] user created id=75c0e72a-9a95-4d09-bf87-3d4e957483df role=researcher
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [dfa20e4a] login success user_id=75c0e72a-9a95-4d09-bf87-3d4e957483df
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [a4a88abd] submission created id=829e0b5a-f209-4679-99d5-116b79b8a1f7 conference=9ea146f3-0e75-4869-9009-111177be772f researcher=75c0e72a-9a95-4d09-bf87-3d4e957483df
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [a4a88abd] grammar check complete submission=829e0b5a-f209-4679-99d5-116b79b8a1f7 score=100.0
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [a4a88abd] structure/citation check complete submission=829e0b5a-f209-4679-99d5-116b79b8a1f7 score=90.0
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [a4a88abd] gate decision submission=829e0b5a-f209-4679-99d5-116b79b8a1f7 status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
+[2026-08-19 18:39:18 UTC] [INFO] [backend] [749f905d] user created id=9c668706-a5ce-4291-b4c4-f8935dba1819 role=organizer
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [3db70861] login success user_id=9c668706-a5ce-4291-b4c4-f8935dba1819
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [8fadbfae] conference created id=e3f836b8-d098-4392-bd45-08c01e3f5faa organizer=9c668706-a5ce-4291-b4c4-f8935dba1819
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [390454b0] user created id=ae83842a-488a-4083-90b4-a8cd3ae6ce5b role=researcher
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [b65b67c0] login success user_id=ae83842a-488a-4083-90b4-a8cd3ae6ce5b
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [2aa9e3b9] user created id=e2e94f73-1074-4742-a292-3e277d694bde role=researcher
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [7ecdc15c] login success user_id=e2e94f73-1074-4742-a292-3e277d694bde
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [4c4b747f] submission created id=d75a4601-3929-4e3f-aa9e-86c517f95f74 conference=e3f836b8-d098-4392-bd45-08c01e3f5faa researcher=ae83842a-488a-4083-90b4-a8cd3ae6ce5b
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [4c4b747f] grammar check complete submission=d75a4601-3929-4e3f-aa9e-86c517f95f74 score=100.0
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [4c4b747f] structure/citation check complete submission=d75a4601-3929-4e3f-aa9e-86c517f95f74 score=90.0
+[2026-08-19 18:39:19 UTC] [INFO] [backend] [4c4b747f] gate decision submission=d75a4601-3929-4e3f-aa9e-86c517f95f74 status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [8f9cbc8e] user created id=df200dfc-16e5-439e-a298-281937e67791 role=organizer
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [4c682816] login success user_id=df200dfc-16e5-439e-a298-281937e67791
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [a3d6f2e8] conference created id=5fd1909f-7fcc-4f23-8d15-1fec06e6f603 organizer=df200dfc-16e5-439e-a298-281937e67791
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [93d56dcd] user created id=b380b64d-e362-41a0-b2c8-143a3af435e6 role=researcher
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [6960591a] login success user_id=b380b64d-e362-41a0-b2c8-143a3af435e6
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [e8f0638e] submission created id=4e29adea-485a-4307-8703-5c90fe40d18c conference=5fd1909f-7fcc-4f23-8d15-1fec06e6f603 researcher=b380b64d-e362-41a0-b2c8-143a3af435e6
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [e8f0638e] grammar check complete submission=4e29adea-485a-4307-8703-5c90fe40d18c score=100.0
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [e8f0638e] structure/citation check complete submission=4e29adea-485a-4307-8703-5c90fe40d18c score=90.0
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [e8f0638e] gate decision submission=4e29adea-485a-4307-8703-5c90fe40d18c status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [b866c4eb] user created id=cb6f9a89-93a3-4554-9730-00b2a1ee7644 role=organizer
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [9c772c44] login success user_id=cb6f9a89-93a3-4554-9730-00b2a1ee7644
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [c163c01d] conference created id=ded9ab2c-e42e-46b9-bb77-46290c5d920d organizer=cb6f9a89-93a3-4554-9730-00b2a1ee7644
+[2026-08-19 18:39:20 UTC] [INFO] [backend] [b0df602d] gate rules updated for conference=ded9ab2c-e42e-46b9-bb77-46290c5d920d count=1
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [75490ce7] user created id=9a68f2da-5168-405f-a146-a0132ccf5fdc role=researcher
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [2f568dad] login success user_id=9a68f2da-5168-405f-a146-a0132ccf5fdc
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [d8b79276] submission created id=0dcbf60b-386a-4db8-aab4-fff30e6f69ef conference=ded9ab2c-e42e-46b9-bb77-46290c5d920d researcher=9a68f2da-5168-405f-a146-a0132ccf5fdc
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [d8b79276] grammar check complete submission=0dcbf60b-386a-4db8-aab4-fff30e6f69ef score=100.0
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [d8b79276] structure/citation check complete submission=0dcbf60b-386a-4db8-aab4-fff30e6f69ef score=0.0
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [d8b79276] gate decision submission=0dcbf60b-386a-4db8-aab4-fff30e6f69ef status=ai_review_hard_failed hard_fail_reasons=['citation_completeness'] soft_flags=[]
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [5256663c] user created id=a45af50e-21a6-4b15-80e7-74facc66ed0a role=organizer
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [dab9fddd] login success user_id=a45af50e-21a6-4b15-80e7-74facc66ed0a
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [68793d1e] conference created id=14a5824c-8933-4800-bb3d-b9cd7275e605 organizer=a45af50e-21a6-4b15-80e7-74facc66ed0a
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [f4c86b03] user created id=4b83a9ad-2138-4c53-8fa1-debc18f163ba role=researcher
+[2026-08-19 18:39:21 UTC] [INFO] [backend] [0ce4ba49] login success user_id=4b83a9ad-2138-4c53-8fa1-debc18f163ba
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [940f0b0d] submission created id=38096756-6d66-47df-99d4-133579754682 conference=14a5824c-8933-4800-bb3d-b9cd7275e605 researcher=4b83a9ad-2138-4c53-8fa1-debc18f163ba
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [940f0b0d] grammar check complete submission=38096756-6d66-47df-99d4-133579754682 score=100.0
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [940f0b0d] structure/citation check complete submission=38096756-6d66-47df-99d4-133579754682 score=90.0
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [940f0b0d] gate decision submission=38096756-6d66-47df-99d4-133579754682 status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [904c4707] user created id=bc8b9811-5fc8-4edf-a314-084f0dc44cfd role=organizer
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [ca5f3481] login success user_id=bc8b9811-5fc8-4edf-a314-084f0dc44cfd
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [b812e965] conference created id=700ac547-bbd6-40ba-89d0-0267223917e9 organizer=bc8b9811-5fc8-4edf-a314-084f0dc44cfd
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [8d8f64c1] user created id=18112eec-7cc6-4881-8dd1-3c05b64ea97e role=researcher
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [a525bab3] login success user_id=18112eec-7cc6-4881-8dd1-3c05b64ea97e
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [0d219fa0] submission created id=509ea10c-baa0-4520-b158-8ac2d6031869 conference=700ac547-bbd6-40ba-89d0-0267223917e9 researcher=18112eec-7cc6-4881-8dd1-3c05b64ea97e
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [0d219fa0] grammar check complete submission=509ea10c-baa0-4520-b158-8ac2d6031869 score=100.0
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [0d219fa0] structure/citation check complete submission=509ea10c-baa0-4520-b158-8ac2d6031869 score=90.0
+[2026-08-19 18:39:22 UTC] [INFO] [backend] [0d219fa0] gate decision submission=509ea10c-baa0-4520-b158-8ac2d6031869 status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [2bb883ac] user created id=b8367457-aa63-446b-8ee6-6ea3dccc8c75 role=organizer
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [cff1413c] login success user_id=b8367457-aa63-446b-8ee6-6ea3dccc8c75
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [0f332f9f] conference created id=cf0b3615-6050-4073-8a9c-3d9cdea347e7 organizer=b8367457-aa63-446b-8ee6-6ea3dccc8c75
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [5f25a559] user created id=6e08d4a8-151f-4b80-b615-3bdebebb05db role=researcher
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [0549cb4b] login success user_id=6e08d4a8-151f-4b80-b615-3bdebebb05db
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [a73b9f2c] user created id=1a1dba0c-e9ad-4e87-ad42-be0c3565a7c0 role=researcher
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [b9e86ffb] login success user_id=1a1dba0c-e9ad-4e87-ad42-be0c3565a7c0
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [d68c41f1] submission created id=4de29286-a2f0-4284-b81d-87a9c6eaa952 conference=cf0b3615-6050-4073-8a9c-3d9cdea347e7 researcher=6e08d4a8-151f-4b80-b615-3bdebebb05db
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [d68c41f1] grammar check complete submission=4de29286-a2f0-4284-b81d-87a9c6eaa952 score=100.0
+[2026-08-19 18:39:23 UTC] [INFO] [backend] [d68c41f1] structure/citation check complete submission=4de29286-a2f0-4284-b81d-87a9c6eaa952 score=90.0
+[2026-08-19 18:39:24 UTC] [INFO] [backend] [d68c41f1] gate decision submission=4de29286-a2f0-4284-b81d-87a9c6eaa952 status=ai_review_passed hard_fail_reasons=[] soft_flags=[]
