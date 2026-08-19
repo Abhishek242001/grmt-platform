@@ -1,0 +1,11 @@
+INFO:     Will watch for changes in these directories: ['/teamspace/studios/this_studio/grmt-platform/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [45974] using WatchFiles
+INFO:     Started server process [45979]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [45979]
+INFO:     Stopping reloader process [45974]

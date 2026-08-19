@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # setup.sh — one-shot bootstrap for Gudsky Research Management Tool (GRMT)
 # Usage: ./setup.sh [--skip-models] [--skip-docker]
+#
+# NOTE: edited for Lightning AI Studio compatibility — Lightning Studios provide
+# one pre-made conda environment per Studio and do not allow creating a new venv
+# ("Venv creation is not allowed"), so this version installs dependencies
+# directly into the Studio's default environment instead of backend/.venv.
 set -euo pipefail
 
 LOG=log.txt
@@ -24,10 +29,10 @@ command -v docker >/dev/null || log "WARNING: docker not found — --skip-docker
 log "system checks OK: python=$(python3 --version), node=$(node --version 2>/dev/null || echo 'not found')"
 
 # 2. Backend Python environment
-log "setting up backend venv..."
-python3 -m venv backend/.venv
-# shellcheck disable=SC1091
-source backend/.venv/bin/activate
+# On Lightning AI Studios, a venv can't be created (one conda env per Studio),
+# so install straight into the Studio's default environment. Locally (non-Lightning),
+# this still works fine without a venv — just less isolated from other projects.
+log "installing backend deps into the active Python environment..."
 pip install --upgrade pip --quiet
 pip install -r backend/requirements.txt --quiet
 log "backend deps installed"
@@ -91,6 +96,6 @@ echo "Setup complete. Summary appended to $LOG — copy/paste it if reporting an
 echo ""
 echo "Next steps:"
 echo "  1. Review backend/.env (secrets, service URLs)"
-echo "  2. cd backend && source .venv/bin/activate && python scripts/seed_demo_data.py"
+echo "  2. cd backend && python scripts/seed_demo_data.py"
 echo "  3. cd backend && uvicorn app.main:app --reload"
 echo "  4. cd frontend && npm run dev   (if frontend deps were installed)"

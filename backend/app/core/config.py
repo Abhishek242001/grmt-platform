@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     # --- Storage (signed-URL streaming for PDFs, development_rule.md §6.4) ---
     storage_encryption_key: str = "CHANGE_ME_32_BYTE_KEY_xxxxxxxxxx"
     pdf_signed_url_ttl_seconds: int = 300  # 5 minutes, per development_rule.md §6.4
+    upload_dir: str = "./uploads"
 
 
 @lru_cache

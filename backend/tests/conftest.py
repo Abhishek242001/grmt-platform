@@ -2,6 +2,7 @@ import os
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_grmt.db")
 os.environ.setdefault("LOG_FILE_PATH", "./test_log.txt")
+os.environ.setdefault("UPLOAD_DIR", "./test_uploads")
 
 import pytest
 from fastapi.testclient import TestClient
