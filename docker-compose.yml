@@ -1,0 +1,70 @@
+# GRMT local development stack — master build document §2.6 / development_rule.md §4.
+#
+# GPU services (Binoculars/Fast-DetectGPT, Ollama LLM) are intentionally NOT
+# in this file — they run on a Lightning AI Studio (development_rule.md §1),
+# not in local Docker, since they need real GPU access this compose file
+# can't provide. Point the backend's .env at your Studio's public URLs for
+# those two.
+#
+# Usage:
+#   docker compose up -d postgres languagetool grobid
+#   docker compose --profile full up -d     # adds the backend container too
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: grmt
+      POSTGRES_PASSWORD: grmt_dev_password
+      POSTGRES_DB: grmt
+    ports:
+      - "5432:5432"
+    volumes:
+      - grmt_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grmt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  languagetool:
+    image: erikvl87/languagetool:latest
+    environment:
+      Java_Xmx: 2g
+    ports:
+      - "8010:8010"
+
+  grobid:
+    image: grobid/grobid:0.9.0-crf
+    init: true
+    ports:
+      - "8070:8070"
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+  backend:
+    build:
+      context: ./backend
+    profiles: ["full"]  # not started by default `docker compose up` — see usage note above
+    environment:
+      DATABASE_URL: postgresql://grmt:grmt_dev_password@postgres:5432/grmt
+      LANGUAGETOOL_URL: http://languagetool:8010
+      GROBID_URL: http://grobid:8070
+      CORS_ALLOW_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      languagetool:
+        condition: service_started
+      grobid:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - ./log.txt:/log.txt
+
+volumes:
+  grmt_postgres_data:
