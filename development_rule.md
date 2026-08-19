@@ -90,6 +90,23 @@ if __name__ == "__main__":
 - Never leave a GPU Studio running unattended overnight without auto-sleep enabled.
 - The admin panel (§7) surfaces current model-serving status; use it to confirm a Studio actually went to sleep after a work session, not just that you closed the tab.
 
+### 1.5 Known Lightning Studio quirks (encountered during initial setup)
+
+These are environment differences from a normal local machine that `setup.sh` and this doc originally assumed away. Documented here so the next person doesn't lose time rediscovering them.
+
+- **No `venv` creation.** A Studio provides exactly one pre-made conda environment (`/home/zeus/miniconda3/envs/cloudspace`) and `python3 -m venv` fails with `Error: Venv creation is not allowed`. Install dependencies directly into the active environment instead (`pip install -r requirements.txt`, no `source .venv/bin/activate` step). `setup.sh` in this repo has already been adjusted to skip venv creation — if you regenerate it from scratch, keep that change.
+- **No `nano` (or `vim`) on the base image.** Edit files headlessly instead, e.g.:
+```bash
+  cat > path/to/file << 'EOF'
+  ...file contents...
+  EOF
+```
+  or use the Studio's built-in VS Code / browser editor rather than assuming a terminal editor is present.
+- **Public port URLs are per-Studio, not fixed.** Each Studio gets a new random hostname suffix (e.g. `https://3000-<suffix>.cloudspaces.litng.ai`) every time you start a fresh Studio. Two things break silently if you forget this after starting a new Studio:
+  - The frontend's `NEXT_PUBLIC_API_BASE_URL` (in `frontend/.env.local`) still pointing at `localhost:8000`, which the *browser* can't reach (it's not the same "localhost" as the Studio's terminal) — surfaces as a generic "Signup failed" / "Request failed" with `net::ERR_CONNECTION_REFUSED` or a CORS error in the browser console.
+  - The backend's `CORS_ALLOW_ORIGINS` (in `backend/.env`) still pointing at `http://localhost:3000` instead of the real public frontend URL — surfaces as `Cross-Origin Request Blocked` in the browser console even once the backend URL itself is reachable.
+  - Fix both, then restart both servers (`NEXT_PUBLIC_*` vars are read once at server start, not hot-reloaded). `lightning_configure.sh` (repo root) automates this — run `./lightning_configure.sh <studio-suffix>` after starting any new Studio, where `<studio-suffix>` is copied once from the port-3000 URL. No confirmed Lightning environment variable exposes this suffix automatically, so that one copy-paste is currently unavoidable.
+
 ---
 
 ## 2. Repository & pipeline structure
