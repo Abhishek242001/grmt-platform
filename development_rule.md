@@ -107,6 +107,40 @@ These are environment differences from a normal local machine that `setup.sh` an
   - The backend's `CORS_ALLOW_ORIGINS` (in `backend/.env`) still pointing at `http://localhost:3000` instead of the real public frontend URL — surfaces as `Cross-Origin Request Blocked` in the browser console even once the backend URL itself is reachable.
   - Fix both, then restart both servers (`NEXT_PUBLIC_*` vars are read once at server start, not hot-reloaded). `lightning_configure.sh` (repo root) automates this — run `./lightning_configure.sh <studio-suffix>` after starting any new Studio, where `<studio-suffix>` is copied once from the port-3000 URL. No confirmed Lightning environment variable exposes this suffix automatically, so that one copy-paste is currently unavoidable.
 
+### 1.6 New Studio checklist (start here every time)
+
+Every fresh Studio is a clean machine — nothing persists from a previous Studio unless it was pushed to GitHub. Do these in order, every time:
+
+1. **Expose ports 3000 and 8000** in the Studio's Ports panel (browser UI only — there is no confirmed CLI/terminal equivalent for this step). Note the random suffix in the URL it gives you, e.g. the `01m0ddm7yyqc6b8109t15d88bc` in `https://3000-01m0ddm7yyqc6b8109t15d88bc.cloudspaces.litng.ai`.
+2. **Set git identity** (does not persist across Studios):
+```bash
+   git config --global user.email "you@example.com"
+   git config --global user.name "Your Name"
+```
+3. **Clone the repo** (skip if this Studio already has it):
+```bash
+   git clone https://github.com/<your-username>/grmt-platform.git
+   cd grmt-platform
+```
+4. **First-time environment setup** (skip individual steps already done on this Studio):
+```bash
+   cd backend
+   pip install -r requirements.txt          # no venv — see §1.5
+   python scripts/generate_keys.py          # JWT keys
+   alembic upgrade head                     # creates grmt_dev.db
+   python scripts/seed_demo_data.py         # demo users + conference
+   cd ../frontend
+   npm install
+   cd ..
+```
+5. **Point the app at this Studio's URLs and start both servers** — one command, using the suffix from step 1:
+```bash
+   ./lightning_configure.sh <studio-suffix>
+```
+6. **Open the frontend** at `https://3000-<studio-suffix>.cloudspaces.litng.ai`, hard refresh (Ctrl+Shift+R), and log in.
+
+If step 6 fails with a CORS error or a plain-text 404 (not JSON) from the backend URL, re-check step 1 first — that's the most common cause, per §1.5.
+
 ---
 
 ## 2. Repository & pipeline structure
