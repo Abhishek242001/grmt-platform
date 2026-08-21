@@ -1,50 +1,42 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import get_settings
-from app.routers import admin, auth, conferences, files, submissions
+from app.core.config import settings
+from app.core.database import Base, engine
+from app.core.logging_utils import configure_logging, get_logger
+from app.models import core as _models_core  # noqa: F401
+from app.models import conferences as _models_conferences  # noqa: F401
+from app.models import submissions as _models_submissions  # noqa: F401
+from app.routers import auth, conferences, submissions, reviews, analytics, files, ws
 
-settings = get_settings()
+configure_logging()
+logger = get_logger("grmt.main")
 
+# Dev convenience only — real environments migrate through Alembic (backend/alembic/),
+# never through create_all().
+if settings.environment == "development":
+    Base.metadata.create_all(bind=engine)
+    logger.info("dev mode: Base.metadata.create_all() ran against %s", settings.database_url)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # DB schema is owned by Alembic migrations (backend/alembic/) — see
-    # development_rule.md §4 and README "Database setup". We deliberately do
-    # NOT call Base.metadata.create_all() here: once migrations exist, that
-    # call would mask a forgotten migration by quietly creating the missing
-    # table instead of failing loudly. Run `alembic upgrade head` before
-    # starting the app.
-    import app.models  # noqa: F401 — ensure every model is registered, useful for tooling/tests that import app.main directly
-
-    yield
-
-
-app = FastAPI(
-    title="Gudsky Research Management Tool (GRMT) API",
-    description="AI-powered conference & paper management system — backend API.",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+app = FastAPI(title="GRMT API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_allow_origins.split(","),
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api")
-app.include_router(conferences.router, prefix="/api")
-app.include_router(submissions.router, prefix="/api")
-app.include_router(admin.router, prefix="/api")
-app.include_router(files.router, prefix="/api")
+app.include_router(auth.router)
+app.include_router(conferences.router)
+app.include_router(submissions.router)
+app.include_router(reviews.router)
+app.include_router(analytics.router)
+app.include_router(files.router)
+app.include_router(ws.router)
 
 
 @app.get("/api/health")
 def health():
-    """development_rule.md §2.3 — one-call health check for backend + admin panel."""
-    return {"status": "ok", "service": "grmt-backend"}
+    return {"status": "ok"}

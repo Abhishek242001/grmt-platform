@@ -1,90 +1,115 @@
-"use client";
+'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { apiFetch, setTokens, clearTokens, ApiError } from "./api";
+// Tokens are stored in localStorage for this build. This is a deliberate,
+// documented tradeoff (XSS surface vs. simplicity) — see the planning log,
+// §3 Known Issues. Revisit with httpOnly cookies before any real deployment.
 
-type Role = "researcher" | "reviewer" | "organizer" | "platform_admin";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+  useCallback,
+} from 'react';
+import { useRouter } from 'next/navigation';
+import * as api from './api';
+import type { User } from './api';
 
-interface AuthState {
-  isAuthenticated: boolean;
-  role: Role | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, role: "researcher" | "organizer", name: string) => Promise<void>;
+const ACCESS_TOKEN_KEY = 'grmt_access_token';
+const REFRESH_TOKEN_KEY = 'grmt_refresh_token';
+
+interface AuthContextValue {
+  user: User | null;
+  isLoading: boolean;
+  signup: (input: {
+    email: string;
+    password: string;
+    full_name: string;
+    role: 'researcher' | 'organizer' | 'reviewer';
+  }) => Promise<void>;
+  login: (input: { email: string; password: string }) => Promise<void>;
   logout: () => void;
-  error: string | null;
 }
 
-const AuthContext = createContext<AuthState | undefined>(undefined);
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-// Decode the role claim out of the JWT payload without a signature check —
-// this is UI convenience only (which nav shell to render, master doc §6.1),
-// never a substitute for the backend's own auth enforcement on every
-// endpoint. Never trust this value for an access-control decision anywhere
-// except "which sidebar links to show."
-function decodeRoleFromToken(token: string): Role | null {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return payload.role ?? null;
-  } catch {
-    return null;
-  }
+function storeTokens(access: string, refresh: string) {
+  localStorage.setItem(ACCESS_TOKEN_KEY, access);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+}
+
+function clearTokens() {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<Role | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
+  // On mount: try to hydrate the session from a stored access token, and if
+  // that's expired, fall back to the refresh token once before giving up.
   useEffect(() => {
-    const token = typeof window !== "undefined" ? window.localStorage.getItem("grmt_access_token") : null;
-    if (token) setRole(decodeRoleFromToken(token));
-    setLoading(false);
+    async function hydrate() {
+      const access = localStorage.getItem(ACCESS_TOKEN_KEY);
+      const refresh = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+      if (!access) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const me = await api.getMe(access);
+        setUser(me);
+      } catch {
+        if (refresh) {
+          try {
+            const tokens = await api.refreshToken(refresh);
+            storeTokens(tokens.access_token, tokens.refresh_token);
+            setUser(tokens.user);
+          } catch {
+            clearTokens();
+          }
+        } else {
+          clearTokens();
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    hydrate();
   }, []);
 
-  async function login(email: string, password: string) {
-    setError(null);
-    try {
-      const resp = await apiFetch<{ access_token: string; refresh_token: string }>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
-      setTokens(resp.access_token, resp.refresh_token);
-      setRole(decodeRoleFromToken(resp.access_token));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Login failed");
-      throw e;
-    }
-  }
+  const signup = useCallback<AuthContextValue['signup']>(async (input) => {
+    const tokens = await api.signup(input);
+    storeTokens(tokens.access_token, tokens.refresh_token);
+    setUser(tokens.user);
+  }, []);
 
-  async function signup(email: string, password: string, signupRole: "researcher" | "organizer", name: string) {
-    setError(null);
-    try {
-      await apiFetch("/auth/signup", {
-        method: "POST",
-        body: JSON.stringify({ email, password, role: signupRole, name }),
-      });
-      await login(email, password);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Signup failed");
-      throw e;
-    }
-  }
+  const login = useCallback<AuthContextValue['login']>(async (input) => {
+    const tokens = await api.login(input);
+    storeTokens(tokens.access_token, tokens.refresh_token);
+    setUser(tokens.user);
+  }, []);
 
-  function logout() {
+  const logout = useCallback(() => {
     clearTokens();
-    setRole(null);
-  }
+    setUser(null);
+    router.push('/login');
+  }, [router]);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated: role !== null, role, loading, login, signup, logout, error }}>
+    <AuthContext.Provider value={{ user, isLoading, signup, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth(): AuthState {
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 }

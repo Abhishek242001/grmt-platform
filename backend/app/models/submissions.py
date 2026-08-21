@@ -1,107 +1,87 @@
-"""
-Submissions, versions, AI reports, plagiarism matches, reviews, decisions,
-cross-conference links, notifications — master build document §4.3.
-"""
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint
-
+import uuid
+from datetime import datetime, timezone
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from app.core.database import Base
-from app.models.core import gen_uuid, utcnow
+
+STATUSES = (
+    "submitted", "processing", "ai_review_passed", "ai_review_hard_failed",
+    "in_human_review", "revise_resubmit", "accepted", "rejected",
+)
+REVIEW_RECOMMENDATIONS = ("accept", "minor_revision", "major_revision", "reject")
+DECISIONS = ("accept", "reject", "revise_resubmit")
+
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Submission(Base):
     __tablename__ = "submissions"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    researcher_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    conference_id = Column(String(36), ForeignKey("conferences.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=_uuid)
+    conference_id = Column(String(36), ForeignKey("conferences.id"), nullable=False, index=True)
+    researcher_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(500), nullable=False)
-    abstract = Column(Text, nullable=True)
-    track = Column(String(255), nullable=True)
-    # processing | ai_review_passed | ai_review_hard_failed | in_human_review
-    # | accepted | rejected | revise_resubmit
-    status = Column(String(32), nullable=False, default="processing")
-    current_version_id = Column(String(36), nullable=True)  # app-layer FK, see master doc §4.3 note
-    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    status = Column(String(32), nullable=False, default="submitted")
+    created_at = Column(DateTime(timezone=True), default=_now)
+    updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
 class SubmissionVersion(Base):
     __tablename__ = "submission_versions"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    submission_id = Column(String(36), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
+    id = Column(String(36), primary_key=True, default=_uuid)
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False, index=True)
     version_number = Column(Integer, nullable=False, default=1)
-    file_url = Column(String(1000), nullable=False)
-    file_hash = Column(String(64), nullable=False)  # sha256 hex digest
-    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    original_filename = Column(String(500), nullable=False)
+    original_file_url = Column(String(1000), nullable=False)
+    converted_pdf_url = Column(String(1000), nullable=True)
+    uploaded_at = Column(DateTime(timezone=True), default=_now)
 
 
 class AIReport(Base):
     __tablename__ = "ai_reports"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    submission_version_id = Column(String(36), ForeignKey("submission_versions.id", ondelete="CASCADE"), nullable=False)
-    # grammar | citation | format | plagiarism | ai_text | table_figure | logical_consistency
+    id = Column(String(36), primary_key=True, default=_uuid)
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False, index=True)
     check_type = Column(String(32), nullable=False)
-    result_json = Column(JSON, nullable=False, default=dict)
-    score = Column(Numeric, nullable=True)
-    pass_fail = Column(Boolean, nullable=True)
-    flagged = Column(Boolean, nullable=False, default=False)
-    model_version = Column(String(128), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
-
-
-class PlagiarismMatch(Base):
-    __tablename__ = "plagiarism_matches"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    ai_report_id = Column(String(36), ForeignKey("ai_reports.id", ondelete="CASCADE"), nullable=False)
-    matched_paper_ext_id = Column(String(255), nullable=False)
-    matched_span = Column(Text, nullable=False)
-    similarity_score = Column(Numeric, nullable=False)
-    source = Column(String(32), nullable=False, default="corpus_embedding")
-
-
-class ReviewerAssignment(Base):
-    __tablename__ = "reviewer_assignments"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    submission_id = Column(String(36), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
-    reviewer_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    assigned_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
-    status = Column(String(32), nullable=False, default="assigned")  # assigned|in_progress|submitted
-
-    __table_args__ = (UniqueConstraint("submission_id", "reviewer_id", name="uq_reviewer_assignment"),)
+    status = Column(String(16), nullable=False, default="pending")
+    result_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_now)
 
 
 class Review(Base):
     __tablename__ = "reviews"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    reviewer_assignment_id = Column(String(36), ForeignKey("reviewer_assignments.id", ondelete="CASCADE"), nullable=False)
-    score = Column(Numeric, nullable=True)
+    __table_args__ = (UniqueConstraint("submission_id", "reviewer_id", name="uq_review_submission_reviewer"),)
+    id = Column(String(36), primary_key=True, default=_uuid)
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False, index=True)
+    reviewer_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    recommendation = Column(String(32), nullable=False)
     comments = Column(Text, nullable=True)
-    recommendation = Column(String(32), nullable=True)  # accept|reject|revise
-    submitted_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_now)
+    updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
 
 
-class CrossConferenceLink(Base):
-    __tablename__ = "cross_conference_links"
+class Decision(Base):
+    __tablename__ = "decisions"
+    __table_args__ = (UniqueConstraint("submission_id", name="uq_decision_submission"),)
+    id = Column(String(36), primary_key=True, default=_uuid)
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False, index=True)
+    decided_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    decision = Column(String(32), nullable=False)
+    notes = Column(Text, nullable=True)
+    decided_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
 
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    submission_id = Column(String(36), ForeignKey("submissions.id", ondelete="CASCADE"), nullable=False)
-    related_submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False)
-    summary_text = Column(Text, nullable=False)
-    generated_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
-    model_version = Column(String(128), nullable=True)
-    match_confidence = Column(String(16), nullable=True)  # possible|likely
 
+class PDFAnnotation(Base):
+    __tablename__ = "pdf_annotations"
 
-class Notification(Base):
-    __tablename__ = "notifications"
-
-    id = Column(String(36), primary_key=True, default=gen_uuid)
-    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    type = Column(String(64), nullable=False)
-    message = Column(Text, nullable=False)
-    read_status = Column(Boolean, nullable=False, default=False)
-    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    id = Column(String(36), primary_key=True, default=_uuid)
+    submission_version_id = Column(String(36), ForeignKey("submission_versions.id"), nullable=False, index=True)
+    reviewer_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    page_number = Column(Integer, nullable=False)
+    position_json = Column(Text, nullable=False)  # e.g. '{"x":120,"y":340,"w":80,"h":20}'
+    color = Column(String(16), nullable=False, default="yellow")
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_now)

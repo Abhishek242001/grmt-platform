@@ -1,8 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-ink: #0f172a;
+  --color-paper: #ffffff;
+  --color-hero: #0a0e1a;
+  --color-accent: #1341b1;
+  --color-accent-dark: #0d2f86;
+  --color-accent-light: #5c8dff;
+  --color-accent-soft: #eaeffb;
+  --color-line: #e2e5ec;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  color: #1b2b3a;
-  background: #fafafa;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
+}
+
+.font-display-bold {
+  font-family: 'Anton', sans-serif;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 0.98;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@keyframes marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee-scroll 26s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

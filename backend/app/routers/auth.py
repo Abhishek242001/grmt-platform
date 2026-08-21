@@ -1,70 +1,82 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from jose import JWTError
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core import security
 from app.core.database import get_db
-from app.core.deps import get_request_id
-from app.core.logging_utils import log
-from app.core.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
+from app.core.deps import get_current_user
+from app.core.logging_utils import get_logger
 from app.models.core import User
-from app.schemas.auth import LoginRequest, RefreshRequest, SignupRequest, SignupResponse, TokenResponse
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshRequest,
+    SignupRequest,
+    TokenResponse,
+    UserOut,
+)
 
-router = APIRouter(prefix="/auth", tags=["auth"])
-settings = get_settings()
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = get_logger("grmt.auth")
 
 
-@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
-def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_db)):
-    req_id = get_request_id(request)
-    existing = db.query(User).filter(User.email == payload.email).first()
+def _issue_tokens(user: User) -> TokenResponse:
+    access = security.create_access_token(subject=user.id, role=user.role)
+    refresh = security.create_refresh_token(subject=user.id)
+    return TokenResponse(access_token=access, refresh_token=refresh, user=UserOut.model_validate(user))
+
+
+@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup(payload: SignupRequest, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.email == payload.email.lower()).first()
     if existing:
-        log.warn(req_id, f"signup rejected: email already registered ({payload.email})")
-        raise HTTPException(status_code=422, detail={"error": {"code": "EMAIL_TAKEN", "message": "Email already registered", "field": "email"}})
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists")
 
     user = User(
-        email=payload.email,
-        password_hash=hash_password(payload.password),
+        email=payload.email.lower(),
+        password_hash=security.hash_password(payload.password),
+        full_name=payload.full_name,
         role=payload.role,
-        name=payload.name,
-        affiliation=payload.affiliation,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    log.info(req_id, f"user created id={user.id} role={user.role}")
-    return SignupResponse(id=user.id, email=user.email, role=user.role, email_verified=False)
+
+    logger.info("signup: new user id=%s role=%s", user.id, user.role)  # never log email/password
+    return _issue_tokens(user)
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    req_id = get_request_id(request)
-    user = db.query(User).filter(User.email == payload.email).first()
-    if user is None or not verify_password(payload.password, user.password_hash):
-        log.warn(req_id, f"login failed for email={payload.email}")
-        raise HTTPException(status_code=401, detail={"error": {"code": "INVALID_CREDENTIALS", "message": "Invalid email or password"}})
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email.lower()).first()
 
-    access = create_access_token(user.id, user.role)
-    refresh = create_refresh_token(user.id)
-    log.info(req_id, f"login success user_id={user.id}")
-    return TokenResponse(access_token=access, refresh_token=refresh, expires_in=settings.access_token_expire_minutes * 60)
+    # Same status/message whether the email doesn't exist or the password is
+    # wrong — distinguishing the two turns this endpoint into a user-enumeration oracle.
+    if not user or not security.verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been deactivated")
+
+    logger.info("login: user id=%s", user.id)
+    return _issue_tokens(user)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_token(payload: RefreshRequest, request: Request, db: Session = Depends(get_db)):
-    req_id = get_request_id(request)
+def refresh_token(payload: RefreshRequest, db: Session = Depends(get_db)):
     try:
-        decoded = decode_token(payload.refresh_token)
-    except JWTError:
-        raise HTTPException(status_code=401, detail={"error": {"code": "INVALID_TOKEN", "message": "Invalid or expired refresh token"}})
+        decoded = security.decode_token(payload.refresh_token)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+
     if decoded.get("type") != "refresh":
-        raise HTTPException(status_code=401, detail={"error": {"code": "INVALID_TOKEN", "message": "Not a refresh token"}})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
 
-    user = db.query(User).filter(User.id == decoded["sub"]).first()
-    if user is None:
-        raise HTTPException(status_code=401, detail={"error": {"code": "INVALID_TOKEN", "message": "User not found"}})
+    user = db.query(User).filter(User.id == decoded.get("sub")).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer valid")
 
-    access = create_access_token(user.id, user.role)
-    new_refresh = create_refresh_token(user.id)
-    log.info(req_id, f"token refreshed user_id={user.id}")
-    return TokenResponse(access_token=access, refresh_token=new_refresh, expires_in=settings.access_token_expire_minutes * 60)
+    return _issue_tokens(user)
+
+
+@router.get("/me", response_model=UserOut)
+def get_me(user: User = Depends(get_current_user)):
+    return UserOut.model_validate(user)

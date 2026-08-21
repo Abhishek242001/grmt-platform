@@ -1,10 +1,39 @@
+nohup: ignoring input
 
 > grmt-frontend@0.1.0 dev
 > next dev
 
-  ▲ Next.js 14.2.15
-  - Local:        http://localhost:3000
-  - Environments: .env.local
+▲ Next.js 16.3.1 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://10.128.0.47:3000
+- Environments: .env.local
+✓ Ready in 572ms
+✓ Running next.config.js took 37ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
 
- ✓ Starting...
- ✓ Ready in 2.6s
+
+⨯ ./app/page.tsx:3:1
+Error: Module not found: Can't resolve '@/components/MarqueeBand'
+  [90m1 |[0m [36mimport[0m [33mLink[0m [36mfrom[0m [32m'next/link'[0m;
+  [90m2 |[0m [36mimport[0m [33mMarketingNav[0m [36mfrom[0m [32m'@/components/MarketingNav'[0m;
+[31m[1m>[0m [90m3 |[0m [36mimport[0m [33mMarqueeBand[0m [36mfrom[0m [32m'@/components/MarqueeBand'[0m;
+  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m
+  [90m5 |[0m [36mconst[0m [33mAUDIENCE_CARDS[0m = [
+  [90m6 |[0m   {
+
+Import map: aliased to relative './components/MarqueeBand' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ GET / 500 in 3.8s (next.js: 3.7s, application-code: 140ms)
+ GET /login 500 in 342ms (next.js: 331ms, application-code: 11ms)
+ GET /signup 500 in 256ms (next.js: 247ms, application-code: 9ms)
+ GET /dashboard 500 in 264ms (next.js: 259ms, application-code: 6ms)
+ GET /conferences 500 in 253ms (next.js: 245ms, application-code: 7ms)
+ GET /submissions 500 in 225ms (next.js: 217ms, application-code: 8ms)

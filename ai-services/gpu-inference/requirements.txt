@@ -1,7 +1,0 @@
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
-torch>=2.1.0
-transformers>=4.44.0
-# Binoculars is not on PyPI — install from source per master doc §3.6:
-#   git clone https://github.com/ahans30/Binoculars
-#   pip install -e Binoculars

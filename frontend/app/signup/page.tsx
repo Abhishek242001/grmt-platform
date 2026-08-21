@@ -1,91 +1,148 @@
-"use client";
+'use client';
 
-import { useState, FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api";
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useAuth } from '@/lib/auth-context';
+import { ApiError } from '@/lib/api';
+import AuthBrandPanel from '@/components/AuthBrandPanel';
+
+type SelfAssignableRole = 'researcher' | 'organizer' | 'reviewer';
+
+const ROLE_OPTIONS: { value: SelfAssignableRole; label: string; blurb: string }[] = [
+  { value: 'researcher', label: 'Researcher', blurb: 'Submit papers, get instant AI feedback' },
+  { value: 'organizer', label: 'Organizer', blurb: 'Run a conference, configure review gates' },
+  { value: 'reviewer', label: 'Reviewer', blurb: 'Review assigned papers' },
+];
 
 export default function SignupPage() {
   const { signup } = useAuth();
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"researcher" | "organizer">("researcher");
-  const [submitting, setSubmitting] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState<SelfAssignableRole>('researcher');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
     setError(null);
+    setIsSubmitting(true);
     try {
-      await signup(email, password, role, name);
-      router.push("/dashboard");
+      await signup({ email, password, full_name: fullName, role });
+      router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Signup failed. Please try again.");
+      setError(err instanceof ApiError ? err.detail : 'Something went wrong. Try again.');
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-6">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-semibold text-brand-primary mb-2">Sign up</h1>
+    <div className="flex min-h-screen">
+      <AuthBrandPanel />
 
-        {error && (
-          <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-            {error}
-          </div>
-        )}
+      <div className="flex flex-1 items-center justify-center px-6 py-16">
+        <div className="w-full max-w-sm">
+          <h2 className="font-display-bold text-3xl">Create Your Account</h2>
+          <p className="mt-2 text-sm text-black/55">
+            Already have one?{' '}
+            <Link href="/login" className="text-[var(--color-accent)] font-medium">
+              Log in
+            </Link>
+          </p>
 
-        {/* Reviewer is invite-only, per master doc §1.2/§1.10 — no self-serve option here */}
-        <div>
-          <label className="block text-sm font-medium mb-1">I am a…</label>
-          <div className="flex gap-3">
-            {(["researcher", "organizer"] as const).map((r) => (
-              <button
-                type="button"
-                key={r}
-                onClick={() => setRole(r)}
-                className={`flex-1 border rounded-md py-2 text-sm capitalize ${
-                  role === r ? "border-brand-primary bg-brand-primary/10 text-brand-primary" : "border-gray-300"
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>
+            {error && (
+              <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            <fieldset>
+              <legend className="block text-sm font-medium mb-2">I am a…</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {ROLE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setRole(opt.value)}
+                    aria-pressed={role === opt.value}
+                    className={`rounded-md border px-2 py-2.5 text-left text-xs transition ${
+                      role === opt.value
+                        ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
+                        : 'border-[var(--color-line)] hover:border-black/30'
+                    }`}
+                  >
+                    <span className="block font-medium">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-black/45">
+                {ROLE_OPTIONS.find((o) => o.value === role)?.blurb}
+              </p>
+            </fieldset>
+
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium mb-1.5">
+                Full name
+              </label>
+              <input
+                id="fullName"
+                type="text"
+                required
+                autoComplete="name"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full rounded-md border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm focus-visible:border-[var(--color-accent)]"
+                placeholder="Ada Lovelace"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium mb-1.5">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-md border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm focus-visible:border-[var(--color-accent)]"
+                placeholder="you@university.edu"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium mb-1.5">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-md border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm focus-visible:border-[var(--color-accent)]"
+                placeholder="At least 8 characters, a letter and a number"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-[var(--color-accent)] py-3 text-sm font-extrabold uppercase tracking-wide text-white transition hover:bg-[var(--color-accent-dark)] disabled:opacity-50" style={{ clipPath: 'polygon(3% 0, 100% 0, 97% 100%, 0 100%)' }}
+            >
+              {isSubmitting ? 'Creating account…' : 'Create account'}
+            </button>
+          </form>
         </div>
-
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-1">Full name</label>
-          <input id="name" required value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2" disabled={submitting} />
-        </div>
-
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium mb-1">Email</label>
-          <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2" disabled={submitting} />
-        </div>
-
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium mb-1">Password</label>
-          <input id="password" type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2" disabled={submitting} />
-        </div>
-
-        <button type="submit" disabled={submitting} className="w-full bg-brand-primary text-white rounded-md py-2 font-medium disabled:opacity-50">
-          {submitting ? "Creating account…" : "Sign up"}
-        </button>
-
-        <p className="text-sm text-gray-500 text-center">
-          Already have an account?{" "}
-          <Link href="/login" className="text-brand-primary underline">
-            Log in
-          </Link>
-        </p>
-      </form>
-    </main>
+      </div>
+    </div>
   );
 }

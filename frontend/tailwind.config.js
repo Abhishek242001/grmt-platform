@@ -1,15 +1,21 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./components/**/*.{js,ts,jsx,tsx,mdx}"],
+  content: [
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './lib/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
   theme: {
     extend: {
       colors: {
-        // Placeholder theme — see assets/branding/gudsky/README.md.
-        // Do NOT guess at brand colors; these are neutral defaults until
-        // color-palette.md is supplied by Gudsky Research Foundation.
+        // Real brand color, pulled directly from the Gudsky Research
+        // Foundation seal logo (#1341b1 is the exact dominant blue).
         brand: {
-          primary: "#2E5B8A",
-          accent: "#B5762B",
+          50: '#eaeffb',
+          100: '#c7d4f3',
+          500: '#1341b1',
+          600: '#0f3596',
+          700: '#0d2f86',
         },
       },
     },
