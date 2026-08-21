@@ -7,3 +7,145 @@ INFO:     Started server process [29345]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     127.0.0.1:63464 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "POST /api/auth/signup HTTP/1.1" 409 Conflict
+2026-08-21 01:52:25,102 | INFO | grmt.auth | login: user id=72655a23-170a-4fa2-ac62-6e1687fe922a
+INFO:     192.168.64.226:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+2026-08-21 01:52:39,697 | INFO | grmt.auth | login: user id=55931443-80ec-464e-a455-ec175dd3c7fe
+INFO:     192.168.64.226:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "POST /api/conferences HTTP/1.1" 201 Created
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/gate-rules HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/gate-rules HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "PUT /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/gate-rules HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/coadmins HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/coadmins HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/analytics HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/analytics HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+2026-08-21 01:57:33,469 | INFO | grmt.auth | login: user id=72655a23-170a-4fa2-ac62-6e1687fe922a
+INFO:     192.168.64.226:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "POST /api/submissions HTTP/1.1" 201 Created
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+2026-08-21 02:00:14,499 | INFO | grmt.auth | login: user id=55931443-80ec-464e-a455-ec175dd3c7fe
+INFO:     192.168.64.226:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/analytics HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/analytics HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/coadmins HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/coadmins HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 200 OK
+2026-08-21 02:00:58,077 | INFO | grmt.auth | login: user id=55931443-80ec-464e-a455-ec175dd3c7fe
+INFO:     192.168.64.226:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/submissions HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/coadmins HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/coadmins HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "POST /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 201 Created
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/coadmins HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff/reviewers HTTP/1.1" 200 OK
+2026-08-21 02:02:07,893 | INFO | grmt.auth | login: user id=4c61622d-5fb0-4a25-ad97-5406f82f98b4
+INFO:     192.168.64.226:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/assigned HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/assigned HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "POST /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 201 Created
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 200 OK
+2026-08-21 02:02:31,866 | INFO | grmt.auth | login: user id=72655a23-170a-4fa2-ac62-6e1687fe922a
+INFO:     192.168.64.226:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/history HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK
+INFO:     192.168.64.226:0 - "GET /api/submissions/mine HTTP/1.1" 200 OK

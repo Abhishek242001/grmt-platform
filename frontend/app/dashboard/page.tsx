@@ -25,10 +25,9 @@ const RESEARCHER_CARDS: StubCard[] = [
   { title: 'Profile & Settings', description: 'Update your name, email preferences, and account details.' },
 ];
 
-const ORGANIZER_CARDS: StubCard[] = [
-  { title: 'Submission Queue', description: 'A live view of every paper submitted to your conference.' },
-  { title: 'Reviewer Management', description: 'Invite, assign, and manage your reviewer pool.' },
-  { title: 'Analytics Dashboard', description: 'Gate pass/fail rates and check performance across your conference.' },
+const ORGANIZER_LINKS: LinkCard[] = [
+  { title: 'Create a Conference', description: 'Set up a new conference and configure its publisher format.', href: '/conferences/new' },
+  { title: 'Your Conferences', description: 'Browse all conferences — yours show a Manage link.', href: '/conferences' },
 ];
 
 const REVIEWER_LINKS: LinkCard[] = [
@@ -45,11 +44,12 @@ const ADMIN_CARDS: StubCard[] = [
 
 const LINKS_BY_ROLE: Record<string, LinkCard[]> = {
   researcher: RESEARCHER_LINKS,
+  organizer: ORGANIZER_LINKS,
   reviewer: REVIEWER_LINKS,
 };
 const CARDS_BY_ROLE: Record<string, StubCard[]> = {
   researcher: RESEARCHER_CARDS,
-  organizer: ORGANIZER_CARDS,
+  organizer: [],
   reviewer: REVIEWER_CARDS,
   platform_admin: ADMIN_CARDS,
 };
@@ -97,7 +97,7 @@ export default function DashboardPage() {
           Welcome back, {user.full_name.split(' ')[0]}.
         </h1>
         <p className="mt-2 text-[var(--color-ink)]/55">
-          Phase 1 has your account, conferences, submissions, and reviews fully working —
+          Phase 1 has your account, conferences, submissions, reviews, and gate rules fully working —
           the panels marked &quot;Coming Soon&quot; light up as the rest ships.
         </p>
 

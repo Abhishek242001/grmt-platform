@@ -7,33 +7,60 @@ nohup: ignoring input
 - Local:         http://localhost:3000
 - Network:       http://10.128.0.47:3000
 - Environments: .env.local
-✓ Ready in 572ms
-✓ Running next.config.js took 37ms
+✓ Ready in 551ms
+✓ Running next.config.js took 31ms
 Attention: Next.js now collects completely anonymous telemetry regarding usage.
 This information is used to shape Next.js' roadmap and prioritize features.
 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
 https://nextjs.org/telemetry
 
 
-⨯ ./app/page.tsx:3:1
-Error: Module not found: Can't resolve '@/components/MarqueeBand'
-  [90m1 |[0m [36mimport[0m [33mLink[0m [36mfrom[0m [32m'next/link'[0m;
-  [90m2 |[0m [36mimport[0m [33mMarketingNav[0m [36mfrom[0m [32m'@/components/MarketingNav'[0m;
-[31m[1m>[0m [90m3 |[0m [36mimport[0m [33mMarqueeBand[0m [36mfrom[0m [32m'@/components/MarqueeBand'[0m;
-  [90m  |[0m [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
-  [90m4 |[0m
-  [90m5 |[0m [36mconst[0m [33mAUDIENCE_CARDS[0m = [
-  [90m6 |[0m   {
-
-Import map: aliased to relative './components/MarqueeBand' inside of [project]/
-
-
-https://nextjs.org/docs/messages/module-not-found
-
-
- GET / 500 in 3.8s (next.js: 3.7s, application-code: 140ms)
- GET /login 500 in 342ms (next.js: 331ms, application-code: 11ms)
- GET /signup 500 in 256ms (next.js: 247ms, application-code: 9ms)
- GET /dashboard 500 in 264ms (next.js: 259ms, application-code: 6ms)
- GET /conferences 500 in 253ms (next.js: 245ms, application-code: 7ms)
- GET /submissions 500 in 225ms (next.js: 217ms, application-code: 8ms)
+○ Compiling /signup ...
+ GET /signup 200 in 3.7s (next.js: 3.4s, application-code: 305ms)
+ GET /login 200 in 490ms (next.js: 461ms, application-code: 30ms)
+[browser] Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior
+ GET /dashboard 200 in 271ms (next.js: 249ms, application-code: 23ms)
+ GET /conferences 200 in 259ms (next.js: 240ms, application-code: 19ms)
+ GET /dashboard 200 in 34ms (next.js: 7ms, application-code: 27ms)
+ GET /conferences/new 200 in 279ms (next.js: 232ms, application-code: 47ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 815ms (next.js: 787ms, application-code: 28ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/queue 200 in 830ms (next.js: 796ms, application-code: 34ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/gate-rules 200 in 908ms (next.js: 862ms, application-code: 46ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/manage 200 in 1134ms (next.js: 1101ms, application-code: 33ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/analytics 200 in 823ms (next.js: 792ms, application-code: 30ms)
+ GET /login 200 in 25ms (next.js: 7ms, application-code: 18ms)
+ GET /login 200 in 21ms (next.js: 3ms, application-code: 17ms)
+ GET /dashboard 200 in 22ms (next.js: 4ms, application-code: 17ms)
+ GET /conferences 200 in 22ms (next.js: 4ms, application-code: 18ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 74ms (next.js: 32ms, application-code: 42ms)
+ GET /submissions 200 in 283ms (next.js: 262ms, application-code: 21ms)
+ GET /submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 200 in 1179ms (next.js: 1149ms, application-code: 30ms)
+ GET /login 200 in 37ms (next.js: 9ms, application-code: 28ms)
+ GET /login 200 in 23ms (next.js: 3ms, application-code: 20ms)
+ GET /dashboard 200 in 21ms (next.js: 4ms, application-code: 17ms)
+ GET /conferences 200 in 21ms (next.js: 4ms, application-code: 17ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 45ms (next.js: 23ms, application-code: 22ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/analytics 200 in 48ms (next.js: 24ms, application-code: 24ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/manage 200 in 62ms (next.js: 31ms, application-code: 31ms)
+ GET /login 200 in 27ms (next.js: 5ms, application-code: 22ms)
+ GET /login 200 in 23ms (next.js: 5ms, application-code: 18ms)
+ GET /dashboard 200 in 23ms (next.js: 4ms, application-code: 19ms)
+ GET /conferences 200 in 22ms (next.js: 4ms, application-code: 18ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/queue 200 in 50ms (next.js: 24ms, application-code: 26ms)
+ GET /submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 200 in 62ms (next.js: 30ms, application-code: 32ms)
+ GET /conferences 200 in 22ms (next.js: 5ms, application-code: 18ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/queue 200 in 61ms (next.js: 30ms, application-code: 31ms)
+ GET /submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 200 in 61ms (next.js: 31ms, application-code: 30ms)
+ GET /conferences 200 in 20ms (next.js: 4ms, application-code: 16ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 60ms (next.js: 33ms, application-code: 28ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff/manage 200 in 64ms (next.js: 32ms, application-code: 32ms)
+ GET /login 200 in 23ms (next.js: 5ms, application-code: 18ms)
+ GET /login 200 in 20ms (next.js: 4ms, application-code: 16ms)
+ GET /dashboard 200 in 30ms (next.js: 5ms, application-code: 25ms)
+ GET /submissions 200 in 24ms (next.js: 6ms, application-code: 18ms)
+ GET /submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 200 in 42ms (next.js: 23ms, application-code: 19ms)
+ GET /login 200 in 25ms (next.js: 4ms, application-code: 21ms)
+ GET /login 200 in 21ms (next.js: 3ms, application-code: 17ms)
+ GET /dashboard 200 in 21ms (next.js: 4ms, application-code: 17ms)
+ GET /submissions 200 in 32ms (next.js: 6ms, application-code: 27ms)
+ GET /submissions/c8db4672-c596-4f35-8efd-fa1b456e1e14 200 in 47ms (next.js: 27ms, application-code: 20ms)

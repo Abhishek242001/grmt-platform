@@ -1,13 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Enforced as of Next 16 (403s + blocked HMR WebSocket otherwise) since the
+  // browser reaches this dev server through Lightning's public proxy domain.
+  allowedDevOrigins: ['*.cloudspaces.litng.ai'],
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        // Server-to-server call, same machine, same process boundary —
-        // never touches the browser, so CORS/Lightning's proxy gate
-        // never enters into it.
+        // Server-to-server call, never touches the browser — this is what
+        // avoids CORS entirely rather than fighting it.
         destination: 'http://localhost:8000/api/:path*',
       },
     ];

@@ -1,10 +1,18 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import AppHeader from '@/components/AppHeader';
+
+const MANAGE_LINKS = [
+  { href: 'queue', label: 'Submission Queue' },
+  { href: 'gate-rules', label: 'Gate Rules' },
+  { href: 'manage', label: 'Reviewers & Co-Admins' },
+  { href: 'analytics', label: 'Analytics' },
+];
 
 export default function ConferenceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,8 +32,7 @@ export default function ConferenceDetailPage() {
 
   useEffect(() => {
     if (!user || !id) return;
-    api.getConference(id).catch(() => setError('Conference not found'));
-    api.getConference(id).then(setConference).catch(() => {});
+    api.getConference(id).then(setConference).catch(() => setError('Conference not found'));
   }, [user, id]);
 
   async function handleSubmit(e: FormEvent) {
@@ -37,9 +44,6 @@ export default function ConferenceDetailPage() {
     setError(null);
     setSubmitting(true);
     try {
-      // Real file storage/upload isn't wired yet — this records the filename against
-      // a placeholder URL, matching what the backend currently accepts. The actual
-      // upload pipeline is a pending Phase 1 item, not something faked here.
       await api.createSubmission({
         conference_id: id,
         title,
@@ -59,6 +63,8 @@ export default function ConferenceDetailPage() {
     return <div className="flex min-h-screen items-center justify-center text-sm text-[var(--color-ink)]/50">Loading…</div>;
   }
 
+  const isOwner = conference && conference.organizer_id === user.id;
+
   return (
     <div className="min-h-screen bg-[var(--color-paper)]">
       <AppHeader />
@@ -73,6 +79,25 @@ export default function ConferenceDetailPage() {
               <p className="mt-2 text-[var(--color-ink)]/55">{conference.description}</p>
             )}
           </>
+        )}
+
+        {isOwner && (
+          <div className="mt-8 border border-[var(--color-accent)] bg-[var(--color-accent-soft)] p-6">
+            <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-accent)]">
+              You organize this conference
+            </h2>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {MANAGE_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={`/conferences/${id}/${link.href}`}
+                  className="border border-[var(--color-accent)] bg-white px-4 py-2 text-xs font-bold uppercase tracking-wide text-[var(--color-accent)] transition hover:bg-[var(--color-accent)] hover:text-white"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
 
         {user.role === 'researcher' && conference && (
