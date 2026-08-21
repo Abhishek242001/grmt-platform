@@ -5,28 +5,14 @@ nohup: ignoring input
 
 ▲ Next.js 16.3.1 (Turbopack)
 - Local:         http://localhost:3000
-- Network:       http://10.128.0.242:3000
+- Network:       http://10.128.1.7:3000
 - Environments: .env.local
-✓ Ready in 640ms
-✓ Running next.config.js took 38ms
+✓ Ready in 502ms
+✓ Running next.config.js took 30ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
 
- GET / 200 in 1139ms (next.js: 785ms, application-code: 354ms)
- GET / 200 in 103ms (next.js: 5ms, application-code: 98ms)
- GET /login 200 in 110ms (next.js: 22ms, application-code: 88ms)
- GET /dashboard 200 in 49ms (next.js: 24ms, application-code: 24ms)
-[browser] Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior
- GET /conferences 200 in 48ms (next.js: 25ms, application-code: 23ms)
- GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 1040ms (next.js: 1001ms, application-code: 39ms)
- GET /submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4 200 in 734ms (next.js: 709ms, application-code: 25ms)
- GET /login 200 in 37ms (next.js: 6ms, application-code: 32ms)
- GET /login 200 in 27ms (next.js: 5ms, application-code: 23ms)
- GET /dashboard 200 in 26ms (next.js: 7ms, application-code: 18ms)
- GET /conferences 200 in 23ms (next.js: 4ms, application-code: 19ms)
- GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 50ms (next.js: 25ms, application-code: 25ms)
- GET /submissions/9877372e-237a-4a53-88c4-ce4a0916e832 200 in 46ms (next.js: 21ms, application-code: 24ms)
- GET /login 200 in 24ms (next.js: 6ms, application-code: 18ms)
- GET /login 200 in 23ms (next.js: 3ms, application-code: 20ms)
- GET /dashboard 200 in 24ms (next.js: 5ms, application-code: 19ms)
- GET /conferences 200 in 28ms (next.js: 4ms, application-code: 24ms)
- GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 43ms (next.js: 23ms, application-code: 21ms)
- GET /submissions/6d95ee7f-3793-4345-8440-aca76272dca4 200 in 57ms (next.js: 23ms, application-code: 34ms)
+
+ GET /dashboard 200 in 3.4s (next.js: 3.1s, application-code: 256ms)

@@ -1,11 +1,20 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import * as api from '@/lib/api';
 import AppHeader from '@/components/AppHeader';
 import StatusBadge from '@/components/StatusBadge';
+
+// react-pdf touches browser-only APIs (Canvas, DOMMatrix) that don't exist
+// during Next.js's server render — ssr: false is required, not optional,
+// or the build itself fails.
+const PdfAnnotationViewer = dynamic(() => import('@/components/PdfAnnotationViewer'), {
+  ssr: false,
+  loading: () => <p className="mt-3 text-sm text-[var(--color-ink)]/45">Loading viewer…</p>,
+});
 
 function GrammarReportCard({ report }: { report: api.AIReport }) {
   let result: api.GrammarCheckResult | null = null;
@@ -269,6 +278,17 @@ export default function SubmissionDetailPage() {
                 ))}
               </ul>
             </div>
+
+            {history.length > 0 && (
+              <div className="mt-6 border border-[var(--color-line)] bg-white p-6">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">Paper</h2>
+                <PdfAnnotationViewer
+                  versionId={history[history.length - 1].id}
+                  canAnnotate={user.role === 'reviewer'}
+                  currentUserId={user.id}
+                />
+              </div>
+            )}
 
             <div className="mt-6 border border-[var(--color-line)] bg-white p-6">
               <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">AI Feedback</h2>

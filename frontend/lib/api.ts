@@ -403,8 +403,45 @@ export function getAnalytics(conferenceId: string): Promise<ConferenceAnalytics>
 
 // ── Files / annotations ──────────────────────────────────────────
 
-export function getPdfUrl(versionId: string): Promise<{ url: string; expires_in_seconds: number }> {
-  return request(`/submissions/versions/${versionId}/pdf-url`);
+export interface SignedUrl {
+  url: string;
+  expires_in_seconds: number;
+}
+
+export interface Annotation {
+  id: string;
+  submission_version_id: string;
+  reviewer_id: string;
+  page_number: number;
+  position_json: string;
+  color: string;
+  comment: string | null;
+}
+
+export interface AnnotationCreate {
+  page_number: number;
+  position_json: string;
+  color?: string;
+  comment?: string;
+}
+
+export function getPdfUrl(versionId: string): Promise<SignedUrl> {
+  return request<SignedUrl>(`/submissions/versions/${versionId}/pdf-url`);
+}
+
+export function getAnnotations(versionId: string): Promise<Annotation[]> {
+  return request<Annotation[]>(`/submissions/versions/${versionId}/annotations`);
+}
+
+export function createAnnotation(versionId: string, input: AnnotationCreate): Promise<Annotation> {
+  return request<Annotation>(`/submissions/versions/${versionId}/annotations`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAnnotation(annotationId: string): Promise<void> {
+  return request<void>(`/submissions/annotations/${annotationId}`, { method: 'DELETE' });
 }
 
 // ── WebSocket ────────────────────────────────────────────────────

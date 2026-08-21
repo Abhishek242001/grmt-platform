@@ -19,7 +19,7 @@
 - **Phase 1 (Foundation, Auth, Backend, Frontend): COMPLETE.**
 - **Phase 2 (AI Models): 3 of 8 checks built and tested.** 5 remain.
 
-Backend test suite: **127/127 passing** as of the last verified state (105 before update14 → +13 table/figure → +3 text-box extraction fix → +6 Word-to-PDF pipeline, update17).
+Backend test suite: **131/131 passing** as of the last verified state (105 before update14 → +13 table/figure → +3 text-box extraction fix → +6 Word-to-PDF pipeline → +4 real signed-URL streaming, update19). Frontend also has a genuine working reviewer PDF viewer with annotations now — verified with a real headless-browser run against a real running instance, not just a build check (see §4.1).
 
 ---
 
@@ -111,7 +111,24 @@ LibreOffice headless (`soffice --headless --convert-to pdf`), not `docx2pdf` (Wi
 - Publishes a `submission_version.pdf_converted` WebSocket event (`{submission_id, version_id, converted, error}`) on the existing conference queue channel — not yet wired into any frontend UI (see gaps below).
 - Real conversion tested throughout (not mocked) — `soffice` is genuinely installed and testable; ~2s per conversion in practice.
 
-**Deferred / explicitly out of scope for this pass**: the reviewer-facing PDF viewer UI itself. The backend now has everything the `PDFAnnotation` model needs (a real converted PDF URL per version), but no frontend component reads `converted_pdf_url` or renders a PDF viewer yet — `api.ts`'s `SubmissionVersion` interface already has the field typed, but nothing consumes it. This is the natural next visible feature once picked up.
+**Deferred / explicitly out of scope for this pass**: none — the reviewer PDF viewer/annotation UI is now DONE too. See new subsection below.
+
+#### Reviewer PDF viewer & annotations (`frontend/components/PdfAnnotationViewer.tsx`) — DONE
+Building this surfaced a real backend gap that had nothing to do with the frontend: `generate_signed_url()` signed a raw filesystem path and nothing ever actually served the bytes back — `verify_signed_url()` was defined but never called anywhere, no `FileResponse`/`StaticFiles` route existed. The existing test only checked the returned string *contained* `"signature="`, never that it was fetchable. Confirmed by tracing the code, not assumed. Fixed as part of this work, not treated as separate:
+
+- `GET /submissions/versions/{id}/pdf-url` now signs `version_id` itself (not a raw filesystem path — avoids leaking the container's layout to the client) and returns a URL pointing at a genuinely new endpoint.
+- `GET /submissions/versions/{id}/pdf-stream?expires=...&signature=...` — the endpoint that actually streams the PDF. Deliberately has **no** `get_current_user` dependency: a browser's native PDF viewer embed can't attach an `Authorization` header, so the signature itself (HMAC-verified, expiry-checked) is the auth — matches `file_signing.py`'s own documented security model. Auth for *who can obtain* a signature already happens at `pdf-url`.
+- Returns 404 (not a mislabeled wrong file) when no real PDF exists yet — checks the resolved path is non-null, ends in `.pdf`, and actually exists on disk, rather than trusting `converted_pdf_url or original_file_url` blindly (a `.docx` original with a failed/pending conversion would otherwise get served back mislabeled as `application/pdf`).
+- 4 new tests, all against real behavior: genuinely fetchable + serves real bytes (fetched **without** an Authorization header, matching how a browser PDF embed actually works), tampered signature rejected, expired signature rejected, missing-PDF case 404s cleanly.
+
+Frontend (`react-pdf`, wraps pdf.js): page navigation, click-to-annotate (reviewers only — gated on `user.role === 'reviewer'`), annotation pins positioned as **percentage of rendered page width/height** (not raw pixels — a deliberate choice for scale-independence, since `position_json`'s format wasn't otherwise pinned down anywhere in the existing schema/tests). Pin click opens the comment; delete is restricted to the annotation's own author, matching the backend's existing `reviewer_id != user.id -> 404` rule.
+
+**Verified with a real, actually-running instance of the app, not just a build check**: started the real backend + frontend dev servers in-sandbox, ran a genuine `.docx` through the real upload → LibreOffice conversion → streaming pipeline, then drove an actual headless browser (Playwright) through the real login flow to:
+- Confirm the PDF canvas has real non-blank rendered pixel content (checked via `getImageData`, not just "a canvas element exists" — a canvas can exist and render nothing)
+- Click on the rendered page, type a comment, save it, and confirm the pin appears at the right position
+- **Reload the page and confirm the annotation persisted** (not just held in React state)
+- Log in as a *different* user (the paper's own researcher, not the annotation's reviewer-author) and confirm: the pin and comment are visible, the "click to annotate" affordance is correctly hidden (not a reviewer), and the Delete button is correctly hidden (not the annotation's author)
+- Confirmed the only console errors present were pre-existing and unrelated (`/images/logo.jpg` missing asset, `/decision` 404 for a submission with no decision yet — both predate this work)
 
 ### 4.2 What's NOT built (5 of 8 checks remain)
 
@@ -162,6 +179,16 @@ Real templates often have multiple `sectPr` sections (e.g., a title-page-specifi
 - **Extracting an `update*.zip` from inside the target directory double-nests the path.** The zip's internal paths are relative to the repo root (e.g., `backend/app/...`), so always `cd ~/grmt-platform` (repo root) before extracting — never `cd` into `backend/` or `frontend/` first.
 - **LibreOffice (`soffice`) is not preinstalled on a fresh Lightning Studio** — confirmed directly (Aug 2026): a fresh instance's `pytest` run failed 5 tests with the wrong error signature until traced back to a missing binary, not a code bug. See §7.2b for the install command. Was deliberately caught by tests hitting the real binary rather than mocking it — same reasoning as §5.1: mocking `soffice` out would have hidden this deployment gap AND the permissive-garbage-input behavior documented in §4.1.
 
+### 5.8 A schema field existing, and an endpoint returning a signed-URL-shaped string, doesn't mean the file is actually fetchable
+Discovered while building the reviewer PDF viewer — before writing any frontend code, tracing whether `GET /pdf-url`'s returned URL could actually be fetched. It couldn't: `generate_signed_url()` signed a raw filesystem path, and `verify_signed_url()` existed but was never called anywhere — no route consumed the signature or served file bytes back. The one existing test only asserted the returned string *contained* `"signature="` and `"expires="`, never that a client could do anything with it.
+
+This is a category of gap worth watching for generally: Phase 1 built the `PDFAnnotation` model, the signing helper, and a schema field all correctly in isolation, each of which looks "done" in a file listing or a passing test — but the actual end-to-end path (client asks for a URL → client fetches that URL → gets real bytes) was never wired together, and no test exercised that path. Fixed by making `pdf-url` sign `version_id` (not a raw path — also avoids leaking the container's filesystem layout to the client) and adding a real `pdf-stream` endpoint that verifies the signature and returns `FileResponse`. New tests fetch the signed URL **without an Authorization header** (matching how a browser's native PDF embed actually works, since it can't attach custom headers) to confirm the signature alone is sufficient — not just checking the endpoint exists.
+
+### 5.9 A backend 404 handled correctly can still surface as an unhandled frontend failure — two separate failure points, only one of which had a fallback
+Found the moment the app was actually used live (not sandbox testing) — a submission whose version had no real PDF (predates the Word→PDF pipeline, or a placeholder never actually uploaded) correctly 404'd from `pdf-stream`, exactly as designed and tested (§5.8). But `PdfAnnotationViewer.tsx` only caught a failure from the `getPdfUrl()` **metadata** call — `pdf-url` itself doesn't validate a real PDF exists (matches its original contract, see §5.8), so it always succeeds and returns a syntactically valid signed URL. The actual PDF *bytes* fetch happens separately, inside react-pdf's `<Document>` component, and THAT failure had no handler — it only surfaced as react-pdf's own internal `console.error`, leaving the user looking at a stuck/blank viewer with zero explanation, while the page itself still returned 200 (nothing actually crashed).
+
+Two independent failure points along one user-facing flow; only handling one of them isn't enough. Fixed with `<Document onLoadError={...}>`, routed to the same friendly "PDF not available" message the metadata-failure path already used. Verified against the exact real scenario (a version with no converted PDF, live in a browser via Playwright) — confirmed the friendly message now renders — and separately confirmed the working case (a version with a real PDF) still renders correctly, so the fix didn't regress the happy path.
+
 ### 5.7 Text-box content is invisible to `doc.paragraphs` entirely — and IEEE's own template guidance tells authors to use text boxes for figures
 Discovered via the table/figure consistency check's first real-document test: a real submitted `.docx` had genuine figure and table captions, but the check reported both as "referenced in the text but no matching caption was found." The captions were real — they just weren't in `doc.paragraphs` at all.
 
@@ -174,7 +201,6 @@ Fixed in `backend/app/ai/docx_utils.py`'s new `extract_textbox_paragraphs()` —
 ## 6. Known, Documented Gaps (not silently dropped — explicitly flagged as follow-ups)
 
 - **`POST /submissions/{id}/resubmit` doesn't accept real file uploads yet** — still takes JSON metadata + a placeholder URL, the same shape `/submissions` originally had before real upload support was added. Needs the same real-multipart-upload treatment `/upload` got. Until fixed, resubmission doesn't actually re-run AI checks (status correctly stays `"submitted"`, not `"processing"`, to avoid the stuck-forever bug this would otherwise cause).
-- **The reviewer PDF viewer/annotation UI doesn't exist yet.** The backend piece (`converted_pdf_url` on every submission version, real LibreOffice conversion) is now DONE — see §4.1. What's missing is purely frontend: no component reads `converted_pdf_url` or renders a PDF with the existing `PDFAnnotation` model's annotations overlaid.
 - **WebSocket live-push isn't wired into the AI-report UI** — the submission detail page still polls every 4 seconds. The WS channel and event (`ai_report.check_completed`, and now also `submission_version.pdf_converted`) already exist and are tested; this is a frontend wiring task, not new backend work.
 - **`.docx` column count isn't measured** — returns `None`, documented limitation, would need raw `<w:cols>` XML digging (not yet attempted).
 - **`.docx` page count isn't knowable without rendering** — same reason page-limit check is PDF-only.
@@ -236,7 +262,7 @@ nohup npm run dev > ~/grmt-platform/frontend.log 2>&1 &
 sleep 8
 tail -20 ~/grmt-platform/frontend.log
 ```
-(If `npm run dev` fails with "command not found" via `nohup`, just retry the exact same block — see §5.6.)
+(If `npm run dev` fails with "command not found" via `nohup`, just retry the exact same block — see §5.6.) `npm install` now also pulls in `react-pdf` (the reviewer PDF viewer's dependency) — no separate step needed, it's in `package.json`.
 
 ### 7.6 Get your public test URL
 ```bash
@@ -288,13 +314,14 @@ This is the pattern used throughout Phase 2 — worth continuing, since it verif
 In rough order of "easiest to build next" given current infrastructure:
 
 1. ~~**Table/figure consistency check**~~ — **DONE**, see §4.1.
-2. ~~**Word-to-PDF conversion pipeline**~~ — **DONE** (backend), see §4.1. The reviewer PDF viewer UI itself is the natural next visible feature — backend has everything it needs (`converted_pdf_url`, `PDFAnnotation` model), nothing in the frontend consumes it yet.
-3. **Wire WebSocket live-push into the AI-report UI** — replaces polling with the already-built, already-tested real-time channel. Frontend-only work.
-4. **Fix `/resubmit` to accept real file uploads** — closes the gap flagged in §6, makes resubmission actually re-trigger AI checks.
-5. **GROBID setup + citation-completeness check** — bigger lift (new Docker service, TEI-XML parsing). Now unblocked — the Word→PDF pipeline it depended on is done.
-6. **Reference corpus + plagiarism check** — real prerequisite work before this check can even start.
-7. **Ollama + Qwen2.5-7B + logical-consistency check** — first LLM-based check, moderate GPU setup.
-8. **Binoculars + Fast-DetectGPT + AI-text detection** — biggest GPU risk (two large models, tight VRAM budget), do last or verify VRAM feasibility early.
+2. ~~**Word-to-PDF conversion pipeline**~~ — **DONE**, see §4.1.
+3. ~~**Reviewer PDF viewer & annotations**~~ — **DONE**, see §4.1. Also fixed a real, previously-untested backend gap along the way (the signed-URL scheme never actually served bytes).
+4. **Wire WebSocket live-push into the AI-report UI** — replaces polling with the already-built, already-tested real-time channel. Frontend-only work.
+5. **Fix `/resubmit` to accept real file uploads** — closes the gap flagged in §6, makes resubmission actually re-trigger AI checks.
+6. **GROBID setup + citation-completeness check** — bigger lift (new Docker service, TEI-XML parsing). Unblocked — the Word→PDF pipeline it depended on is done.
+7. **Reference corpus + plagiarism check** — real prerequisite work before this check can even start.
+8. **Ollama + Qwen2.5-7B + logical-consistency check** — first LLM-based check, moderate GPU setup.
+9. **Binoculars + Fast-DetectGPT + AI-text detection** — biggest GPU risk (two large models, tight VRAM budget), do last or verify VRAM feasibility early.
 
 ---
 
@@ -313,7 +340,8 @@ backend/app/core/
 └── word_to_pdf.py             # LibreOffice headless Word->PDF conversion, per-call profile isolation
 
 backend/app/routers/
-└── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload endpoint
+├── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload endpoint
+└── files.py                   # pdf-url (issues signed URL) + pdf-stream (actually serves bytes, signature-only auth) + annotation CRUD
 
 backend/tests/
 ├── test_grammar_check.py
@@ -323,8 +351,10 @@ backend/tests/
 ├── test_docx_utils.py
 ├── test_gate_engine.py
 ├── test_word_to_pdf.py        # real soffice conversion, no mocking
+├── test_files.py              # real signed-URL streaming: fetchable, tamper-rejected, expiry-rejected, real annotation CRUD
 └── test_submissions.py        # includes integration tests for all checks + PDF conversion running together
 
-frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard display components
-frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult TypeScript types (converted_pdf_url already typed on SubmissionVersion, unconsumed by any component yet)
+frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard + PdfAnnotationViewer wiring
+frontend/components/PdfAnnotationViewer.tsx  # react-pdf-based viewer, click-to-annotate (reviewer-gated), percentage-positioned pins
+frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult, Annotation/SignedUrl types + CRUD functions
 ```
