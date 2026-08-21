@@ -19,3 +19,4 @@ log.txt
 
 # OS
 .DS_Store
+backend/uploads/
