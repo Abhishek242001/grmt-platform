@@ -11,6 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.core.database as database_module
 from app.core.database import Base, get_db
 from app.main import app
 
@@ -20,6 +21,13 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Reassigning the module ATTRIBUTE (not a name some other module already
+# imported via `from ... import SessionLocal`) — anything that accesses
+# `database_module.SessionLocal()` at call time, including background tasks
+# that can't use Depends(get_db), picks up the test database too. This is
+# what closes the gap that `Depends(get_db)`-based overrides alone can't reach.
+database_module.SessionLocal = TestingSessionLocal
 
 
 @pytest.fixture(autouse=True)

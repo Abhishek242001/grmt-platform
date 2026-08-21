@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     file_signing_secret: str = "dev-only-change-in-production"
     signed_url_expire_seconds: int = 300
 
+    # Phase 2 — AI checks
+    languagetool_url: str = "http://localhost:8010/v2/check"
+    upload_root: str = "uploads"  # relative to backend/, real .docx bytes land here
+
     log_level: str = "INFO"
     log_file: str = "../log.txt"
 

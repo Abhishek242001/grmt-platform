@@ -44,14 +44,17 @@ export default function ConferenceDetailPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await api.createSubmission({
+      // Two steps: create the submission record, then attach the real file —
+      // the upload step is what actually triggers the grammar check.
+      const sub = await api.createSubmission({
         conference_id: id,
         title,
         original_filename: file.name,
         original_file_url: `placeholder://uploads/${file.name}`,
       });
+      await api.uploadSubmissionFile(sub.id, file);
       setSuccess(true);
-      setTimeout(() => router.push('/submissions'), 1200);
+      setTimeout(() => router.push(`/submissions/${sub.id}`), 1200);
     } catch (err) {
       setError(err instanceof api.ApiError ? err.detail : 'Submission failed');
     } finally {
@@ -103,7 +106,9 @@ export default function ConferenceDetailPage() {
         {user.role === 'researcher' && conference && (
           <div className="mt-10 border border-[var(--color-line)] bg-white p-8">
             <h2 className="text-xl font-extrabold">Submit Your Paper</h2>
-            <p className="mt-1 text-sm text-[var(--color-ink)]/55">Word (.docx) only — PDF is not accepted.</p>
+            <p className="mt-1 text-sm text-[var(--color-ink)]/55">
+              Word (.docx) or PDF accepted — Word recommended for the most accurate format checks.
+            </p>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>
               {error && <div role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -120,7 +125,7 @@ export default function ConferenceDetailPage() {
               <div>
                 <label htmlFor="file" className="mb-1.5 block text-sm font-medium">Manuscript file</label>
                 <input
-                  id="file" type="file" accept=".docx" required
+                  id="file" type="file" accept=".docx,.pdf" required
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="w-full border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm"
                 />

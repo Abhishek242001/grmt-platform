@@ -7,6 +7,103 @@ import * as api from '@/lib/api';
 import AppHeader from '@/components/AppHeader';
 import StatusBadge from '@/components/StatusBadge';
 
+function GrammarReportCard({ report }: { report: api.AIReport }) {
+  let result: api.GrammarCheckResult | null = null;
+  try {
+    result = report.result_json ? JSON.parse(report.result_json) : null;
+  } catch {
+    result = null;
+  }
+
+  if (!result || result.status !== 'complete') {
+    return (
+      <div className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm text-red-600">
+        Grammar check failed: {result?.error ?? 'unknown error'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 border-t border-[var(--color-line)] pt-4">
+      <div className="flex items-center gap-4">
+        <span className="font-bold">Grammar</span>
+        <span className="font-display-bold text-2xl text-[var(--color-accent)]">{result.score}</span>
+        <span className="text-xs text-[var(--color-ink)]/50">
+          {result.error_count} flagged issue{result.error_count === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {result.chunks_total !== undefined && (
+        <p className="mt-1.5 text-xs text-[var(--color-ink)]/40">
+          Full document checked
+          {result.word_count ? ` — ${result.word_count.toLocaleString()} words` : ''}
+          {result.chunks_total > 1 ? ` across ${result.chunks_total} sections` : ''}
+          {result.chunks_checked !== undefined && result.chunks_checked < result.chunks_total
+            ? ` (${result.chunks_total - result.chunks_checked} section(s) failed to check — results may be incomplete)`
+            : ''}
+        </p>
+      )}
+
+      {result.matches.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {result.matches.map((m, i) => (
+            <li key={i} className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold">{m.category || m.rule_id}</span>
+                {m.page != null && (
+                  <span className="whitespace-nowrap text-xs font-bold uppercase tracking-wide text-[var(--color-accent)]">
+                    Page {m.page}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-[var(--color-ink)]/60">{m.message}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function FormatReportCard({ report }: { report: api.AIReport }) {
+  let result: api.FormatCheckResult | null = null;
+  try {
+    result = report.result_json ? JSON.parse(report.result_json) : null;
+  } catch {
+    result = null;
+  }
+
+  if (!result || result.status !== 'complete') {
+    return (
+      <div className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm text-red-600">
+        Format check failed: {result?.error ?? 'unknown error'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 border-t border-[var(--color-line)] pt-4">
+      <div className="flex items-center gap-4">
+        <span className="font-bold">Format ({(result.publisher_format || 'ieee').toUpperCase()})</span>
+        <span className="font-display-bold text-2xl text-[var(--color-accent)]">{result.score}</span>
+        <span className="text-xs text-[var(--color-ink)]/50">
+          {result.checks_passed}/{result.checks_total} checks passed
+        </span>
+      </div>
+
+      {result.issues.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {result.issues.map((issue, i) => (
+            <li key={i} className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm text-[var(--color-ink)]/70">
+              {issue}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading } = useAuth();
@@ -16,6 +113,7 @@ export default function SubmissionDetailPage() {
   const [history, setHistory] = useState<api.SubmissionVersion[]>([]);
   const [decision, setDecision] = useState<api.Decision | null>(null);
   const [reviews, setReviews] = useState<api.Review[]>([]);
+  const [aiReports, setAiReports] = useState<api.AIReport[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // resubmit form state
@@ -38,6 +136,7 @@ export default function SubmissionDetailPage() {
     api.getSubmissionHistory(id).then(setHistory).catch(() => {});
     api.getDecision(id).then(setDecision).catch(() => {});
     api.listReviews(id).then(setReviews).catch(() => {});
+    api.getAiReports(id).then(setAiReports).catch(() => {});
   }
 
   useEffect(() => {
@@ -45,6 +144,17 @@ export default function SubmissionDetailPage() {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, id]);
+
+  // Grammar check runs in the background after upload — poll briefly while
+  // we're waiting on it, rather than require a manual refresh. A live WS
+  // push here (ai_report.check_completed, already emitted server-side) is
+  // the natural next upgrade over polling.
+  useEffect(() => {
+    if (!submission || submission.status !== 'processing' || aiReports.length > 0) return;
+    const interval = setInterval(reload, 4000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submission, aiReports]);
 
   async function handleResubmit(e: FormEvent) {
     e.preventDefault();
@@ -113,11 +223,37 @@ export default function SubmissionDetailPage() {
               </ul>
             </div>
 
+            <div className="mt-6 border border-[var(--color-line)] bg-white p-6">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">AI Feedback</h2>
+
+              {submission.status === 'processing' && aiReports.length === 0 && (
+                <p className="mt-3 text-sm text-[var(--color-ink)]/50">Checks are running…</p>
+              )}
+
+              {aiReports.length === 0 && submission.status !== 'processing' && (
+                <p className="mt-3 text-sm text-[var(--color-ink)]/45">No checks have run yet.</p>
+              )}
+
+              {aiReports.map((report) => {
+                if (report.check_type === 'grammar') {
+                  return <GrammarReportCard key={report.id} report={report} />;
+                }
+                if (report.check_type === 'format') {
+                  return <FormatReportCard key={report.id} report={report} />;
+                }
+                return (
+                  <div key={report.id} className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm">
+                    <span className="font-bold capitalize">{report.check_type.replace('_', ' ')}</span> — {report.status}
+                  </div>
+                );
+              })}
+            </div>
+
             {user.role === 'researcher' && submission.status === 'revise_resubmit' && (
               <form onSubmit={handleResubmit} className="mt-6 border border-[var(--color-line)] bg-white p-6">
                 <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">Resubmit</h2>
                 <input
-                  type="file" accept=".docx" required
+                  type="file" accept=".docx,.pdf" required
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="mt-3 w-full border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm"
                 />

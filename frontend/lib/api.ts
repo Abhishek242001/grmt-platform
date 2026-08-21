@@ -268,6 +268,64 @@ export function conferenceQueue(conferenceId: string): Promise<Submission[]> {
   return request<Submission[]>(`/conferences/${conferenceId}/submissions`);
 }
 
+// ── AI reports ───────────────────────────────────────────────────
+
+export interface AIReport {
+  id: string;
+  submission_id: string;
+  check_type: string;
+  status: string;
+  result_json: string | null;
+}
+
+export interface GrammarCheckResult {
+  status: string;
+  error?: string;
+  error_count: number;
+  word_count?: number;
+  score: number | null;
+  chunks_checked?: number;
+  chunks_total?: number;
+  matches: {
+    message: string;
+    short_message: string;
+    offset: number;
+    length: number;
+    rule_id: string;
+    category: string;
+    page: number | null;
+  }[];
+}
+
+export interface FormatCheckResult {
+  status: string;
+  error?: string;
+  publisher_format?: string;
+  measurements?: Record<string, number | string | null>;
+  checks_passed: number;
+  checks_total: number;
+  score: number | null;
+  issues: string[];
+}
+
+export function getAiReports(submissionId: string): Promise<AIReport[]> {
+  return request<AIReport[]>(`/submissions/${submissionId}/ai-report`);
+}
+
+export async function uploadSubmissionFile(submissionId: string, file: File): Promise<SubmissionVersion> {
+  const form = new FormData();
+  form.append('file', file);
+  const resp = await fetch(`${API_BASE_URL}/submissions/${submissionId}/upload`, {
+    method: 'POST',
+    headers: authHeaders(), // no Content-Type — browser sets the multipart boundary itself
+    body: form,
+  });
+  if (!resp.ok) {
+    throw new ApiError(resp.status, await parseErrorDetail(resp));
+  }
+  return resp.json();
+}
+
 // ── Reviews / decisions ──────────────────────────────────────────
 
 export interface Review {
