@@ -10,3 +10,11 @@ nohup: ignoring input
 ✓ Ready in 640ms
 ✓ Running next.config.js took 38ms
 
+ GET / 200 in 1139ms (next.js: 785ms, application-code: 354ms)
+ GET / 200 in 103ms (next.js: 5ms, application-code: 98ms)
+ GET /login 200 in 110ms (next.js: 22ms, application-code: 88ms)
+ GET /dashboard 200 in 49ms (next.js: 24ms, application-code: 24ms)
+[browser] Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior
+ GET /conferences 200 in 48ms (next.js: 25ms, application-code: 23ms)
+ GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 1040ms (next.js: 1001ms, application-code: 39ms)
+ GET /submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4 200 in 734ms (next.js: 709ms, application-code: 25ms)

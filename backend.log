@@ -7,3 +7,26 @@ INFO:     Started server process [22717]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     127.0.0.1:51146 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     192.168.64.50:0 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
+INFO:     192.168.64.50:0 - "POST /api/auth/refresh HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "POST /api/auth/refresh HTTP/1.1" 200 OK
+2026-08-21 17:23:35,752 | INFO | grmt.auth | login: user id=72655a23-170a-4fa2-ac62-6e1687fe922a
+INFO:     192.168.64.50:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "POST /api/submissions HTTP/1.1" 201 Created
+INFO:     192.168.64.50:0 - "POST /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/upload HTTP/1.1" 200 OK
+2026-08-21 17:24:23,750 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/history HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4 HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4 HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/history HTTP/1.1" 200 OK
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.50:0 - "GET /api/submissions/b2bc798d-0b6d-440a-b5a1-7ef8bf7015a4/ai-report HTTP/1.1" 200 OK
