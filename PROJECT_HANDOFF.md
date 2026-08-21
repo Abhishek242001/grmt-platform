@@ -17,9 +17,9 @@
 ## 2. Current Overall Status
 
 - **Phase 1 (Foundation, Auth, Backend, Frontend): COMPLETE.**
-- **Phase 2 (AI Models): 2 of 8 checks built, tested, and confirmed working against real documents.** 6 remain.
+- **Phase 2 (AI Models): 3 of 8 checks built and tested.** 5 remain.
 
-Backend test suite: **105/105 passing** as of the last verified state.
+Backend test suite: **118/118 passing** as of the last verified state (105 from before + 13 new for table/figure consistency).
 
 ---
 
@@ -55,7 +55,7 @@ Next.js 16.3.1, React 19.0.0, zero known vulnerabilities.
 
 ## 4. Phase 2 — AI Models: Detailed Status
 
-### 4.1 What's DONE (2 of 8 checks)
+### 4.1 What's DONE (3 of 8 checks)
 
 #### Grammar check (`backend/app/ai/grammar_check.py`) — DONE
 Uses self-hosted **LanguageTool** (Docker container, `erikvl87/languagetool`, port 8010).
@@ -77,20 +77,32 @@ Pure local computation — **no external service**, no GPU, no API calls. Checks
 - Structure presence: Abstract, References, Roman-numeral section headings
 
 #### Gate evaluation engine (`backend/app/core/gate_engine.py`) — DONE
-Deterministic rule evaluation — NOT an AI model itself. Reads completed `AIReport` rows, compares against the conference's configured `GateRule` thresholds, decides `ai_review_hard_failed` vs `in_human_review`. **Deliberately never returns `ai_review_passed`** — with only 2 of 8 checks built, claiming "passed" would falsely imply the full pipeline ran clean.
+Deterministic rule evaluation — NOT an AI model itself. Reads completed `AIReport` rows, compares against the conference's configured `GateRule` thresholds, decides `ai_review_hard_failed` vs `in_human_review`. **Deliberately never returns `ai_review_passed`** — with only 3 of 8 checks built, claiming "passed" would falsely imply the full pipeline ran clean.
 
 `CHECK_EVALUATORS` registry design: adding a new check's gate-evaluation logic is a ~6-line addition (a new evaluator function + one registry line), not a rewrite. Proven — this is exactly what happened when format-compliance was added.
 
 Both checks run together in one background task (`_run_ai_checks_and_store` in `backend/app/routers/submissions.py`), triggered on `POST /submissions/{id}/upload`.
 
-### 4.2 What's NOT built (6 of 8 checks remain)
+#### Table/figure consistency check (`backend/app/ai/table_figure_check.py`) — DONE
+Pure text analysis — **no external service, no GPU, no page-geometry needed** — so unlike format-compliance, this one runs on **both `.docx` and `.pdf`** via the same `extract_text()` dispatcher `grammar_check.py` already uses (PDF gets page numbers on issues via the same `page_map`; `.docx` doesn't, matching the existing nullable-`page` pattern from grammar matches).
+
+- **Caption vs. in-text-reference distinction** — a caption is recognized by its punctuation ("Fig. 3.", "TABLE II.") immediately after the number, at the start of a line/paragraph; a broader pattern catches in-text mentions anywhere ("as shown in Fig. 3," / "Table II shows..."). A number only counts as "truly referenced" if its reference count exceeds its caption count (the caption line itself always also matches the broader pattern).
+- **Two-way consistency**: flags a caption with no in-text reference, AND an in-text reference with no matching caption — checked independently for figures and tables.
+- **Numbering gaps and duplicates** — sequential-numbering check across captioned figures/tables; duplicate caption numbers flagged separately.
+- **Roman numeral support for tables** (IEEE convention: tables use Roman numerals, figures use Arabic) — `_numeral_to_int()` handles both, so a table numbered I/II/III and a figure numbered 1/2/3 are both checked correctly. Some non-IEEE templates use Arabic for tables too; the regex accepts either for tables, so this isn't a blocker.
+- **Calibrated against a real published IEEE-style paper** (fetched via web search, not committed to the repo — copyright), not just synthetic fixtures, per §5.1's lesson. The real paper had exactly the kind of defect this check is meant to catch: a figure caption ("Fig1. Steps in document clustering") with no matching in-text reference anywhere in the body — confirmed the caption/reference regex distinction works correctly against real inconsistent-real-world formatting (mixed "Fig1." vs "Fig 2." spacing/punctuation within the same document), not just clean synthetic text.
+- Zero tables/figures in a document is **not** treated as an error — `status: "complete"`, `score: null`, `checks_total: 0` (nothing to check, not a failure).
+- Registered in `CHECK_EVALUATORS` as `"table_figure"` (already reserved in `CHECK_TYPES`/`app/models/conferences.py` — no migration needed) — same `score >= threshold` shape as grammar/format, ~6-line addition as promised.
+
+**Deferred** (out of scope for this pass, would need more infrastructure): actually verifying a table's claimed column count or that a figure's referenced image data exists/isn't corrupt — that needs Camelot (table structure) or real image-object inspection, not just text matching. This check verifies referencing/numbering consistency, not content correctness.
+
+### 4.2 What's NOT built (5 of 8 checks remain)
 
 | Check | Model/Tool needed | Blocker |
 |---|---|---|
 | **Citation completeness** | GROBID | Needs GROBID Docker service stood up (not done), needs PDF input specifically |
 | **Plagiarism/similarity** | BGE-M3 + FAISS | Needs a reference corpus of papers to compare against — doesn't exist yet, real prerequisite, not a shortcut-able gap |
 | **AI-generated-text detection** | Binoculars + Fast-DetectGPT | Needs the GPU Studio; two ~7B models loaded — tight on the T4's 16GB VRAM budget, unverified whether both fit simultaneously |
-| **Table/figure consistency** | PyMuPDF/pdfplumber + Camelot | No GPU needed — genuinely the easiest remaining check to build next |
 | **Logical consistency** | Qwen2.5-7B-Instruct via Ollama | Needs Ollama + model download on the GPU Studio; single model so more tractable than AI-text detection, but still new GPU infra |
 
 ---
@@ -240,7 +252,7 @@ This is the pattern used throughout Phase 2 — worth continuing, since it verif
 
 In rough order of "easiest to build next" given current infrastructure:
 
-1. **Table/figure consistency check** — no GPU, no corpus dependency, uses PyMuPDF/Camelot (already-familiar tooling). Genuinely the natural next check to build.
+1. ~~**Table/figure consistency check**~~ — **DONE**, see §4.1.
 2. **Word-to-PDF conversion pipeline** (LibreOffice headless) — unlocks both the reviewer PDF viewer and GROBID-dependent citation checking.
 3. **Wire WebSocket live-push into the AI-report UI** — replaces polling with the already-built, already-tested real-time channel. Frontend-only work.
 4. **Fix `/resubmit` to accept real file uploads** — closes the gap flagged in §6, makes resubmission actually re-trigger AI checks.
@@ -258,10 +270,11 @@ backend/app/ai/
 ├── grammar_check.py           # LanguageTool integration, chunking, byline/refs trimming, acronym filter
 ├── pdf_text_extraction.py     # Column-aware PDF text extraction, dehyphenation, page_map tracking
 ├── format_compliance_check.py # IEEE margin/font/structure checks, page-size-aware
+├── table_figure_check.py      # Caption<->reference consistency, numbering gaps/duplicates (.docx + .pdf)
 └── docx_utils.py              # Shared open_docx() with legacy-namespace compatibility fallback
 
 backend/app/core/
-└── gate_engine.py             # CHECK_EVALUATORS registry, evaluate_submission_gates()
+└── gate_engine.py             # CHECK_EVALUATORS registry (grammar, format, table_figure), evaluate_submission_gates()
 
 backend/app/routers/
 └── submissions.py             # _run_ai_checks_and_store() background task, upload endpoint
@@ -270,10 +283,11 @@ backend/tests/
 ├── test_grammar_check.py
 ├── test_pdf_text_extraction.py
 ├── test_format_compliance_check.py
+├── test_table_figure_check.py
 ├── test_docx_utils.py
 ├── test_gate_engine.py
-└── test_submissions.py        # includes integration tests for both checks running together
+└── test_submissions.py        # includes integration tests for all three checks running together
 
-frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard display components
-frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult TypeScript types
+frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard display components
+frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult TypeScript types
 ```

@@ -309,12 +309,14 @@ def test_upload_runs_grammar_check_and_stores_ai_report(client, monkeypatch):
     r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
     assert r.status_code == 200
     reports = r.json()
-    # Two reports now — grammar AND format compliance both run per upload.
-    assert len(reports) == 2
+    # Three reports now — grammar, format compliance, AND table/figure
+    # consistency all run per upload.
+    assert len(reports) == 3
     report_by_type = {r["check_type"]: r for r in reports}
-    assert set(report_by_type.keys()) == {"grammar", "format"}
+    assert set(report_by_type.keys()) == {"grammar", "format", "table_figure"}
     assert report_by_type["grammar"]["status"] == "complete"
     assert report_by_type["format"]["status"] == "complete"
+    assert report_by_type["table_figure"]["status"] == "complete"
 
     result = json.loads(report_by_type["grammar"]["result_json"])
     assert result["error_count"] == 1
@@ -411,7 +413,7 @@ def test_pdf_upload_also_runs_grammar_check(client, monkeypatch):
 
     r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
     reports = r.json()
-    assert len(reports) == 2
+    assert len(reports) == 3
     report_by_type = {r["check_type"]: r for r in reports}
     result = json.loads(report_by_type["grammar"]["result_json"])
     assert result["status"] == "complete"  # extraction + LanguageTool call both succeeded

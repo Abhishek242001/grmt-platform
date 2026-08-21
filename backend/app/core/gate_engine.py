@@ -35,10 +35,24 @@ def _format_passes(result: dict, threshold: float | None) -> bool:
     return score >= threshold
 
 
+def _table_figure_passes(result: dict, threshold: float | None) -> bool:
+    # Same checks_passed/checks_total -> 0-100 score shape as format-
+    # compliance, so the same comparison logic applies unchanged. A None
+    # score here means the document had no tables/figures to check at all
+    # (not a failure) — don't gate on that.
+    if threshold is None:
+        return True
+    score = result.get("score")
+    if score is None:
+        return True
+    return score >= threshold
+
+
 CHECK_EVALUATORS = {
     "grammar": _grammar_passes,
     "format": _format_passes,
-    # citation, plagiarism, ai_text, table_figure, logical_consistency
+    "table_figure": _table_figure_passes,
+    # citation, plagiarism, ai_text, logical_consistency
     # register here as each check is built — this is the one place that needs
     # a new line added, not a rewrite of the evaluation logic itself.
 }

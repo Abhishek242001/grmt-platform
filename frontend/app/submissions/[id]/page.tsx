@@ -104,6 +104,53 @@ function FormatReportCard({ report }: { report: api.AIReport }) {
   );
 }
 
+function TableFigureReportCard({ report }: { report: api.AIReport }) {
+  let result: api.TableFigureCheckResult | null = null;
+  try {
+    result = report.result_json ? JSON.parse(report.result_json) : null;
+  } catch {
+    result = null;
+  }
+
+  if (!result || result.status !== 'complete') {
+    return (
+      <div className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm text-red-600">
+        Table/figure check failed: {result?.error ?? 'unknown error'}
+      </div>
+    );
+  }
+
+  const nothingToCheck = !result.figures_found && !result.tables_found;
+
+  return (
+    <div className="mt-3 border-t border-[var(--color-line)] pt-4">
+      <div className="flex items-center gap-4">
+        <span className="font-bold">Tables &amp; Figures</span>
+        {result.score !== null ? (
+          <span className="font-display-bold text-2xl text-[var(--color-accent)]">{result.score}</span>
+        ) : (
+          <span className="text-xs text-[var(--color-ink)]/50">No tables or figures detected</span>
+        )}
+        {result.score !== null && (
+          <span className="text-xs text-[var(--color-ink)]/50">
+            {result.checks_passed}/{result.checks_total} checks passed
+          </span>
+        )}
+      </div>
+
+      {!nothingToCheck && result.issues.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {result.issues.map((issue, i) => (
+            <li key={i} className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm text-[var(--color-ink)]/70">
+              {issue}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading } = useAuth();
@@ -240,6 +287,9 @@ export default function SubmissionDetailPage() {
                 }
                 if (report.check_type === 'format') {
                   return <FormatReportCard key={report.id} report={report} />;
+                }
+                if (report.check_type === 'table_figure') {
+                  return <TableFigureReportCard key={report.id} report={report} />;
                 }
                 return (
                   <div key={report.id} className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm">

@@ -59,12 +59,14 @@ def _run_ai_checks_and_store(submission_id: str, file_path: str) -> None:
     captured at import time) so conftest.py's test override actually reaches
     this code — see planning log §26 for why a direct import wouldn't work.
 
-    Runs every check that's currently implemented (grammar, format) — new
-    checks get added to this loop, not a new copy of this whole function."""
+    Runs every check that's currently implemented (grammar, format,
+    table_figure) — new checks get added to this loop, not a new copy of
+    this whole function."""
     import asyncio
 
     from app.ai.format_compliance_check import run_format_compliance_check
     from app.ai.grammar_check import run_grammar_check
+    from app.ai.table_figure_check import run_table_figure_check
     from app.core.gate_engine import evaluate_submission_gates
     from app.core.ws_manager import get_manager
 
@@ -79,6 +81,7 @@ def _run_ai_checks_and_store(submission_id: str, file_path: str) -> None:
         checks_to_run = [
             ("grammar", lambda: run_grammar_check(file_path)),
             ("format", lambda: run_format_compliance_check(file_path, publisher_format=publisher_format)),
+            ("table_figure", lambda: run_table_figure_check(file_path)),
         ]
 
         for check_type, run_fn in checks_to_run:

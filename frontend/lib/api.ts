@@ -308,6 +308,17 @@ export interface FormatCheckResult {
   issues: string[];
 }
 
+export interface TableFigureCheckResult {
+  status: string;
+  error?: string;
+  figures_found?: boolean;
+  tables_found?: boolean;
+  checks_passed: number;
+  checks_total: number;
+  score: number | null;
+  issues: string[];
+}
+
 export function getAiReports(submissionId: string): Promise<AIReport[]> {
   return request<AIReport[]>(`/submissions/${submissionId}/ai-report`);
 }

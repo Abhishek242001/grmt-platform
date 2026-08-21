@@ -5,36 +5,8 @@ nohup: ignoring input
 
 ▲ Next.js 16.3.1 (Turbopack)
 - Local:         http://localhost:3000
-- Network:       http://10.128.0.22:3000
+- Network:       http://10.128.0.242:3000
 - Environments: .env.local
-✓ Ready in 516ms
-✓ Running next.config.js took 31ms
-Attention: Next.js now collects completely anonymous telemetry regarding usage.
-This information is used to shape Next.js' roadmap and prioritize features.
-You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
-https://nextjs.org/telemetry
+✓ Ready in 640ms
+✓ Running next.config.js took 38ms
 
-
- GET /submissions/a966f7be-ef54-4576-81c8-b4398cca974a 200 in 3.6s (next.js: 3.3s, application-code: 217ms)
- GET /login 200 in 587ms (next.js: 560ms, application-code: 27ms)
- GET /login 200 in 35ms (next.js: 5ms, application-code: 30ms)
-[browser] Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior
- GET /dashboard 200 in 304ms (next.js: 281ms, application-code: 23ms)
- GET /conferences 200 in 274ms (next.js: 244ms, application-code: 30ms)
- GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 832ms (next.js: 807ms, application-code: 25ms)
- GET /submissions/5df433c5-d7dd-453b-a6b2-564167595ef2 200 in 48ms (next.js: 22ms, application-code: 26ms)
- GET /login 200 in 23ms (next.js: 4ms, application-code: 18ms)
- GET /login 200 in 23ms (next.js: 5ms, application-code: 18ms)
- GET /dashboard 200 in 24ms (next.js: 4ms, application-code: 20ms)
- GET /conferences 200 in 28ms (next.js: 7ms, application-code: 21ms)
- GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 40ms (next.js: 21ms, application-code: 18ms)
- GET /submissions/cf1a63ff-96aa-4feb-ac82-997005eeb65c 200 in 59ms (next.js: 30ms, application-code: 30ms)
- GET /login 200 in 20ms (next.js: 4ms, application-code: 16ms)
- GET /login 200 in 28ms (next.js: 4ms, application-code: 24ms)
- GET /login 200 in 117ms (next.js: 3ms, application-code: 113ms)
- GET /login? 200 in 39ms (next.js: 3ms, application-code: 36ms)
- GET /dashboard 200 in 18ms (next.js: 3ms, application-code: 15ms)
-[browser] Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: https://nextjs.org/docs/messages/missing-data-scroll-behavior
- GET /conferences 200 in 25ms (next.js: 6ms, application-code: 20ms)
- GET /conferences/bdba29d3-2933-427c-8255-56201d96f3ff 200 in 44ms (next.js: 25ms, application-code: 19ms)
- GET /submissions/9902445e-ddf3-445a-aab4-9e5c04003aba 200 in 43ms (next.js: 23ms, application-code: 20ms)
