@@ -5,7 +5,42 @@ from app.ai.grammar_check import (
     _split_into_chunks,
     _trim_to_body,
     CHUNK_SIZE,
+    extract_text_from_docx,
 )
+
+
+def test_extract_text_from_docx_includes_textbox_captions(tmp_path):
+    """Regression test for a real bug: a figure/table caption inserted via a
+    text box (as IEEE's own template guidance recommends) used to be
+    silently dropped by extraction entirely — see docx_utils.py's
+    extract_textbox_paragraphs docstring for the full story."""
+    from docx import Document
+    from lxml import etree
+
+    doc = Document()
+    doc.add_paragraph("Ordinary body text, mentioning Fig. 1 by name.")
+
+    p = doc.add_paragraph()
+    run = p.add_run()
+    textbox_xml = """
+    <w:pict xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:v="urn:schemas-microsoft-com:vml">
+      <v:shape>
+        <v:textbox>
+          <w:txbxContent xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+            <w:p><w:r><w:t>Fig. 1. Caption inside a text box.</w:t></w:r></w:p>
+          </w:txbxContent>
+        </v:textbox>
+      </v:shape>
+    </w:pict>
+    """
+    run._r.append(etree.fromstring(textbox_xml))
+
+    path = str(tmp_path / "textbox.docx")
+    doc.save(path)
+
+    text = extract_text_from_docx(path)
+    assert "Fig. 1. Caption inside a text box." in text
 
 
 def test_trim_to_body_excludes_byline_and_references():

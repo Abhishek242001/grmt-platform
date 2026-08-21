@@ -419,6 +419,92 @@ def test_pdf_upload_also_runs_grammar_check(client, monkeypatch):
     assert result["status"] == "complete"  # extraction + LanguageTool call both succeeded
 
 
+def test_docx_upload_populates_converted_pdf_url(client, monkeypatch):
+    """Word->PDF pipeline integration test — real LibreOffice conversion
+    (not mocked; soffice is a real, testable dependency here), triggered by
+    a real .docx upload through the real endpoint. Confirms the resulting
+    converted_pdf_url is a genuinely valid, openable PDF, not just a
+    non-null string."""
+
+    def fake_post(url, data=None, timeout=None):
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"matches": []}
+
+        return FakeResponse()
+
+    import app.ai.grammar_check as grammar_check_module
+    monkeypatch.setattr(grammar_check_module.httpx, "post", fake_post)
+
+    org_token = _signup(client, "org@example.com", role="organizer")
+    conf_id = _make_conference(client, org_token)
+    res_token = _signup(client, "res@example.com", role="researcher")
+    r = _submit(client, res_token, conf_id)
+    sub_id = r.json()["id"]
+
+    docx_bytes = _make_docx_bytes(["Body text for the word-to-pdf conversion test."])
+    r = client.post(
+        f"/api/submissions/{sub_id}/upload",
+        files={"file": ("paper.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        headers=_auth(res_token),
+    )
+    assert r.status_code == 200
+
+    r = client.get(f"/api/submissions/{sub_id}/history", headers=_auth(res_token))
+    assert r.status_code == 200
+    versions = r.json()
+    assert len(versions) == 1
+    converted_path = versions[0]["converted_pdf_url"]
+    assert converted_path is not None
+    assert converted_path.endswith(".pdf")
+
+    import pymupdf
+    pdf = pymupdf.open(converted_path)
+    assert len(pdf) >= 1
+    assert "Body text for the word-to-pdf conversion test." in pdf[0].get_text()
+
+
+def test_pdf_upload_sets_converted_pdf_url_to_itself(client, monkeypatch):
+    """An already-PDF upload needs no conversion — converted_pdf_url should
+    just point at the original file, so the frontend never has to branch
+    on original file type to find a PDF to display."""
+
+    def fake_post(url, data=None, timeout=None):
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"matches": []}
+
+        return FakeResponse()
+
+    import app.ai.grammar_check as grammar_check_module
+    monkeypatch.setattr(grammar_check_module.httpx, "post", fake_post)
+
+    org_token = _signup(client, "org@example.com", role="organizer")
+    conf_id = _make_conference(client, org_token)
+    res_token = _signup(client, "res@example.com", role="researcher")
+    r = _submit(client, res_token, conf_id)
+    sub_id = r.json()["id"]
+
+    pdf_bytes = _make_pdf_bytes("Already a PDF, no conversion needed.")
+    r = client.post(
+        f"/api/submissions/{sub_id}/upload",
+        files={"file": ("paper.pdf", pdf_bytes, "application/pdf")},
+        headers=_auth(res_token),
+    )
+    assert r.status_code == 200
+
+    r = client.get(f"/api/submissions/{sub_id}/history", headers=_auth(res_token))
+    versions = r.json()
+    assert versions[0]["converted_pdf_url"] is not None
+    assert versions[0]["converted_pdf_url"].endswith("paper.pdf")
+
+
 def test_upload_also_runs_format_compliance_check(client, monkeypatch):
     """Full integration: real upload, real format-compliance measurement
     against a genuinely well-formed IEEE .docx (correct margins, correct

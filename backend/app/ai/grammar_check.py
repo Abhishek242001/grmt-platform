@@ -106,10 +106,20 @@ def _split_into_chunks(text: str, max_chars: int = CHUNK_SIZE):
 
 
 def extract_text_from_docx(file_path: str) -> str:
-    from app.ai.docx_utils import open_docx
+    from app.ai.docx_utils import extract_textbox_paragraphs, open_docx
 
     doc = open_docx(file_path)
-    return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    body_paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    # Text-box content (captions on figures/tables inserted the way IEEE's
+    # own template guidance recommends) lives outside doc.paragraphs
+    # entirely — see docx_utils.extract_textbox_paragraphs's docstring for
+    # why, and the real submission that surfaced this gap. Appended after
+    # body text rather than interleaved at its true position: reconstructing
+    # exact reading-order placement isn't worth the complexity for what
+    # reads this text (grammar/table-figure checks scan the whole document
+    # for matches; they don't depend on paragraph adjacency).
+    textbox_paragraphs = extract_textbox_paragraphs(doc)
+    return "\n\n".join(body_paragraphs + textbox_paragraphs)
 
 
 def extract_text(file_path: str):

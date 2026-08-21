@@ -19,7 +19,7 @@
 - **Phase 1 (Foundation, Auth, Backend, Frontend): COMPLETE.**
 - **Phase 2 (AI Models): 3 of 8 checks built and tested.** 5 remain.
 
-Backend test suite: **118/118 passing** as of the last verified state (105 from before + 13 new for table/figure consistency).
+Backend test suite: **127/127 passing** as of the last verified state (105 before update14 → +13 table/figure → +3 text-box extraction fix → +6 Word-to-PDF pipeline, update17).
 
 ---
 
@@ -96,6 +96,23 @@ Pure text analysis — **no external service, no GPU, no page-geometry needed** 
 
 **Deferred** (out of scope for this pass, would need more infrastructure): actually verifying a table's claimed column count or that a figure's referenced image data exists/isn't corrupt — that needs Camelot (table structure) or real image-object inspection, not just text matching. This check verifies referencing/numbering consistency, not content correctness.
 
+**Real-document validation, round 2** (Aug 2026): tested against an actual real submission using the genuine (unfilled) Scribbr IEEE template. Two rounds of investigation followed:
+1. First pass surfaced a genuine bug — see §5.7 (text-box content invisible to `doc.paragraphs` entirely) — fixed in `docx_utils.py`, benefits every check that reads `.docx` text, not just this one.
+2. After that fix, the SAME file still flagged "Figure 1 referenced but no caption found." Full XML inspection (no `numPr`, no field codes, no text-box wrapper on the caption paragraph) confirmed this is NOT a bug: the raw template's "figure caption"-styled paragraph literally contains placeholder prose ("This is a figure caption. It appears directly underneath the figure.") — it never writes `"Fig. 1."` as text anywhere, while the body prose genuinely does reference "Fig. 1" by name. Validated by filling in the same real template with realistic content (preserving all original styles) — scored 100/0 issues — then deliberately breaking it, which the check correctly caught. **Conclusion: the check is accurate; an unfilled template genuinely has this defect**, and the template's own last line literally warns authors to remove placeholder text before submitting.
+
+#### Word-to-PDF conversion pipeline (`backend/app/core/word_to_pdf.py`) — DONE
+LibreOffice headless (`soffice --headless --convert-to pdf`), not `docx2pdf` (Windows/COM-only, not viable server-side) — matches the approach the master build doc already flagged. Not an AI check; deterministic, external-process-based infrastructure, same category as the gate-evaluation engine above.
+
+- Populates `SubmissionVersion.converted_pdf_url` — a schema field that already existed from Phase 1 (built for the reviewer's PDF annotation viewer, `PDFAnnotation` model) but was never populated until now. No migration needed.
+- Wired into the same background task as the AI checks (`_convert_to_pdf_and_store`, called from `_run_ai_checks_and_store`), but as its own step with its own error handling — a conversion failure never blocks grammar/format/table_figure checks, which don't depend on the PDF at all.
+- An already-`.pdf` upload needs no conversion — `converted_pdf_url` is just set to the original file path directly, so the frontend never has to branch on original file type to find a PDF to display.
+- **Concurrency safety, confirmed empirically, not assumed**: LibreOffice headless instances sharing a user-profile directory can clash when invoked concurrently — real, documented upstream behavior. Each call here gets its own throwaway profile (`-env:UserInstallation=file://...`, a fresh `tempfile.TemporaryDirectory()` per call), removed after. Tested with 3 real concurrent conversions via `ThreadPoolExecutor` — confirmed each output matched only its own input, no cross-contamination.
+- **Real, confirmed limitation, not a guess**: `soffice --convert-to` does NOT reject malformed/non-`.docx` input with an error — it falls back to interpreting the raw bytes as plain text and produces a PDF containing that text verbatim (exit code 0, no stderr). Confirmed by feeding it a genuinely corrupt file and inspecting the output PDF's actual text content. This means the conversion step is **not** a validity check for the uploaded file — that's still `docx_utils.open_docx()`'s job (used by the AI checks), which DOES raise loudly on a genuinely corrupt `.docx`.
+- Publishes a `submission_version.pdf_converted` WebSocket event (`{submission_id, version_id, converted, error}`) on the existing conference queue channel — not yet wired into any frontend UI (see gaps below).
+- Real conversion tested throughout (not mocked) — `soffice` is genuinely installed and testable; ~2s per conversion in practice.
+
+**Deferred / explicitly out of scope for this pass**: the reviewer-facing PDF viewer UI itself. The backend now has everything the `PDFAnnotation` model needs (a real converted PDF URL per version), but no frontend component reads `converted_pdf_url` or renders a PDF viewer yet — `api.ts`'s `SubmissionVersion` interface already has the field typed, but nothing consumes it. This is the natural next visible feature once picked up.
+
 ### 4.2 What's NOT built (5 of 8 checks remain)
 
 | Check | Model/Tool needed | Blocker |
@@ -143,14 +160,22 @@ Real templates often have multiple `sectPr` sections (e.g., a title-page-specifi
 - **`npm`/`node` occasionally report "command not found" via `nohup` right after a fresh shell session**, even though they work fine when invoked directly moments later — likely a PATH-initialization timing quirk on fresh shells. If `nohup npm run dev` fails this way, just retry the same commands — it resolved on retry every time this happened.
 - **The LanguageTool Docker container does not survive Studio restarts** — always check `docker ps -a | grep languagetool` and `docker start languagetool` (or re-`docker run` if the container's gone entirely) after any restart, *before* testing grammar checks. A "LanguageTool request failed for all chunks" error usually means this.
 - **Extracting an `update*.zip` from inside the target directory double-nests the path.** The zip's internal paths are relative to the repo root (e.g., `backend/app/...`), so always `cd ~/grmt-platform` (repo root) before extracting — never `cd` into `backend/` or `frontend/` first.
+- **LibreOffice (`soffice`) is not preinstalled on a fresh Lightning Studio** — confirmed directly (Aug 2026): a fresh instance's `pytest` run failed 5 tests with the wrong error signature until traced back to a missing binary, not a code bug. See §7.2b for the install command. Was deliberately caught by tests hitting the real binary rather than mocking it — same reasoning as §5.1: mocking `soffice` out would have hidden this deployment gap AND the permissive-garbage-input behavior documented in §4.1.
+
+### 5.7 Text-box content is invisible to `doc.paragraphs` entirely — and IEEE's own template guidance tells authors to use text boxes for figures
+Discovered via the table/figure consistency check's first real-document test: a real submitted `.docx` had genuine figure and table captions, but the check reported both as "referenced in the text but no matching caption was found." The captions were real — they just weren't in `doc.paragraphs` at all.
+
+Root cause: `paragraph.text` / `run.text` in python-docx only walk a run's **direct** `w:t` children. Content inside a text box lives nested inside a `w:txbxContent` element (wrapped in either a legacy `<v:pict><v:textbox>` or a modern DrawingML shape) — structurally *not* a direct-child paragraph of the document body, so it's invisible to the normal paragraph-iteration approach every check up to this point relied on. This isn't a rare authoring choice: IEEE's own official conference-template guidance explicitly tells authors to insert figures via a text box ("more stable than directly inserting a picture directly"), so this will recur on other real submissions, not just this one.
+
+Fixed in `backend/app/ai/docx_utils.py`'s new `extract_textbox_paragraphs()` — walks the document XML for every `w:txbxContent` element (covers both the legacy and modern wrapper with one tag-name search) and returns its paragraph text. `grammar_check.py`'s `extract_text_from_docx()` now appends this to the normal paragraph text, so **every check that reads document text** (grammar, table/figure, and format-compliance's structure checks) benefits, not just the check that happened to surface the gap. Text-box paragraphs are appended after body text rather than interleaved at their true position — reconstructing exact reading-order placement wasn't worth the complexity, since every consumer of this text does whole-document pattern matching, not position-dependent reading.
 
 ---
 
 ## 6. Known, Documented Gaps (not silently dropped — explicitly flagged as follow-ups)
 
 - **`POST /submissions/{id}/resubmit` doesn't accept real file uploads yet** — still takes JSON metadata + a placeholder URL, the same shape `/submissions` originally had before real upload support was added. Needs the same real-multipart-upload treatment `/upload` got. Until fixed, resubmission doesn't actually re-run AI checks (status correctly stays `"submitted"`, not `"processing"`, to avoid the stuck-forever bug this would otherwise cause).
-- **Word-to-PDF conversion pipeline doesn't exist.** Needed for: reviewers' PDF viewer, and GROBID (which needs PDF input) for the citation-completeness check. Standard approach flagged in the master doc: LibreOffice headless (`soffice --headless --convert-to pdf`), not `docx2pdf` (Windows/COM-only, not viable server-side).
-- **WebSocket live-push isn't wired into the AI-report UI** — the submission detail page still polls every 4 seconds. The WS channel and event (`ai_report.check_completed`) already exist and are tested; this is a frontend wiring task, not new backend work.
+- **The reviewer PDF viewer/annotation UI doesn't exist yet.** The backend piece (`converted_pdf_url` on every submission version, real LibreOffice conversion) is now DONE — see §4.1. What's missing is purely frontend: no component reads `converted_pdf_url` or renders a PDF with the existing `PDFAnnotation` model's annotations overlaid.
+- **WebSocket live-push isn't wired into the AI-report UI** — the submission detail page still polls every 4 seconds. The WS channel and event (`ai_report.check_completed`, and now also `submission_version.pdf_converted`) already exist and are tested; this is a frontend wiring task, not new backend work.
 - **`.docx` column count isn't measured** — returns `None`, documented limitation, would need raw `<w:cols>` XML digging (not yet attempted).
 - **`.docx` page count isn't knowable without rendering** — same reason page-limit check is PDF-only.
 - **Reviewer-facing frontend pages were built early and haven't been re-verified** with the same real-build/real-test rigor later work received.
@@ -177,6 +202,16 @@ cd ~/grmt-platform/backend
 pip install -r requirements.txt --break-system-packages --quiet
 ls secrets/jwt_private.pem || python3 app/scripts/generate_keys.py
 ```
+
+### 7.2b LibreOffice (Word-to-PDF conversion dependency)
+Not preinstalled on a fresh Lightning Studio — confirmed the hard way (Aug 2026): a full backend test run reported `soffice` missing, not just "some tests failed." `soffice` is a real production runtime dependency (not just a test one), so this needs to actually be present, not mocked around.
+```bash
+sudo apt-get update && sudo apt-get install -y libreoffice-writer
+# no sudo available? try without it — most cloud dev containers run as root:
+# apt-get update && apt-get install -y libreoffice-writer
+which soffice && soffice --version
+```
+`libreoffice-writer` alone is enough — it pulls in `libreoffice-core` (which actually provides the `soffice` binary) as a dependency, without the full `libreoffice` metapackage's much larger footprint (Calc, Impress, etc., none of which this pipeline needs).
 
 ### 7.3 LanguageTool (grammar check dependency)
 ```bash
@@ -214,7 +249,7 @@ URL is `https://3000-<that-suffix>.cloudspaces.litng.ai`
 cd ~/grmt-platform/backend
 python3 -m pytest -v 2>&1 | tail -20
 ```
-Should show **105 passed**.
+Should show whatever passed count matches your last pushed commit on `dev` — apply any not-yet-pushed `updateN.zip` packages you've received on top (check with `git log --oneline -5` and compare against what's been discussed), then re-run to confirm **127 passed**.
 
 ---
 
@@ -253,10 +288,10 @@ This is the pattern used throughout Phase 2 — worth continuing, since it verif
 In rough order of "easiest to build next" given current infrastructure:
 
 1. ~~**Table/figure consistency check**~~ — **DONE**, see §4.1.
-2. **Word-to-PDF conversion pipeline** (LibreOffice headless) — unlocks both the reviewer PDF viewer and GROBID-dependent citation checking.
+2. ~~**Word-to-PDF conversion pipeline**~~ — **DONE** (backend), see §4.1. The reviewer PDF viewer UI itself is the natural next visible feature — backend has everything it needs (`converted_pdf_url`, `PDFAnnotation` model), nothing in the frontend consumes it yet.
 3. **Wire WebSocket live-push into the AI-report UI** — replaces polling with the already-built, already-tested real-time channel. Frontend-only work.
 4. **Fix `/resubmit` to accept real file uploads** — closes the gap flagged in §6, makes resubmission actually re-trigger AI checks.
-5. **GROBID setup + citation-completeness check** — bigger lift (new Docker service, TEI-XML parsing), best done after the PDF pipeline above exists.
+5. **GROBID setup + citation-completeness check** — bigger lift (new Docker service, TEI-XML parsing). Now unblocked — the Word→PDF pipeline it depended on is done.
 6. **Reference corpus + plagiarism check** — real prerequisite work before this check can even start.
 7. **Ollama + Qwen2.5-7B + logical-consistency check** — first LLM-based check, moderate GPU setup.
 8. **Binoculars + Fast-DetectGPT + AI-text detection** — biggest GPU risk (two large models, tight VRAM budget), do last or verify VRAM feasibility early.
@@ -271,13 +306,14 @@ backend/app/ai/
 ├── pdf_text_extraction.py     # Column-aware PDF text extraction, dehyphenation, page_map tracking
 ├── format_compliance_check.py # IEEE margin/font/structure checks, page-size-aware
 ├── table_figure_check.py      # Caption<->reference consistency, numbering gaps/duplicates (.docx + .pdf)
-└── docx_utils.py              # Shared open_docx() with legacy-namespace compatibility fallback
+└── docx_utils.py              # Shared open_docx() + extract_textbox_paragraphs() (text-box content)
 
 backend/app/core/
-└── gate_engine.py             # CHECK_EVALUATORS registry (grammar, format, table_figure), evaluate_submission_gates()
+├── gate_engine.py             # CHECK_EVALUATORS registry (grammar, format, table_figure), evaluate_submission_gates()
+└── word_to_pdf.py             # LibreOffice headless Word->PDF conversion, per-call profile isolation
 
 backend/app/routers/
-└── submissions.py             # _run_ai_checks_and_store() background task, upload endpoint
+└── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload endpoint
 
 backend/tests/
 ├── test_grammar_check.py
@@ -286,8 +322,9 @@ backend/tests/
 ├── test_table_figure_check.py
 ├── test_docx_utils.py
 ├── test_gate_engine.py
-└── test_submissions.py        # includes integration tests for all three checks running together
+├── test_word_to_pdf.py        # real soffice conversion, no mocking
+└── test_submissions.py        # includes integration tests for all checks + PDF conversion running together
 
 frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard display components
-frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult TypeScript types
+frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult TypeScript types (converted_pdf_url already typed on SubmissionVersion, unconsumed by any component yet)
 ```

@@ -45,3 +45,40 @@ def open_docx(file_path: str) -> DocumentObject:
     except KeyError:
         normalized = _normalize_legacy_ooxml_namespace(file_path)
         return Document(normalized)
+
+
+_W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_TXBX_CONTENT_TAG = f"{_W_NS}txbxContent"
+_PARAGRAPH_TAG = f"{_W_NS}p"
+_TEXT_TAG = f"{_W_NS}t"
+
+
+def extract_textbox_paragraphs(doc: DocumentObject) -> list[str]:
+    """Returns the text of every paragraph living inside a text box —
+    content `doc.paragraphs` never sees at all, since it's nested inside a
+    `w:txbxContent` element rather than being a direct child of the document
+    body (confirmed empirically: `paragraph.text`/`run.text` only walk a
+    run's DIRECT `w:t` children, never descending into a nested shape).
+
+    This isn't a rare edge case for real IEEE-formatted submissions: the
+    IEEE conference template's OWN official guidance explicitly recommends
+    inserting figures via a text box ("more stable than directly inserting
+    a picture"), so a figure/table caption placed exactly the way IEEE
+    tells authors to place it is otherwise silently invisible to every
+    check that reads document text. Confirmed against a real submission
+    (table/figure check calibration, Aug 2026) — the check flagged "Figure
+    1 referenced but no caption found" and the same for Table 1, and in
+    both cases the caption genuinely existed in the file, just inside a
+    text box grammar_check.py's extraction never looked at.
+
+    Covers both the legacy VML wrapper (`<v:textbox>`) and the modern
+    DrawingML wrapper — both nest their content in a `w:txbxContent`
+    element under the same wordprocessingml namespace, so one XML walk for
+    that tag name covers both without branching on text-box flavor."""
+    paragraphs = []
+    for txbx in doc.element.body.iter(_TXBX_CONTENT_TAG):
+        for p in txbx.iter(_PARAGRAPH_TAG):
+            text = "".join(t.text or "" for t in p.iter(_TEXT_TAG))
+            if text.strip():
+                paragraphs.append(text)
+    return paragraphs

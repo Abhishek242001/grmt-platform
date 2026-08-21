@@ -53,7 +53,66 @@ def _get_visible_submission_or_404(submission_id: str, user: User, db: Session) 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
 
 
-def _run_ai_checks_and_store(submission_id: str, file_path: str) -> None:
+def _convert_to_pdf_and_store(submission_id: str, version_id: str, file_path: str) -> None:
+    """Runs before the AI checks, in the same background task, but kept as
+    its own function/step: a conversion failure must never block grammar/
+    format/table_figure checks from running against the original file —
+    those don't depend on the PDF at all. Populates
+    SubmissionVersion.converted_pdf_url, which already existed as a schema
+    field from Phase 1 (built for the reviewer's PDF annotation viewer)
+    but was never populated until this."""
+    import asyncio
+
+    from app.core.word_to_pdf import ConversionError, convert_to_pdf
+    from app.core.ws_manager import get_manager
+
+    db = database_module.SessionLocal()
+    try:
+        version = db.query(SubmissionVersion).filter(SubmissionVersion.id == version_id).first()
+        if version is None:
+            return
+        sub = db.query(Submission).filter(Submission.id == submission_id).first()
+        if sub is None:
+            return
+
+        ext = os.path.splitext(file_path)[1].lower()
+        converted = False
+        error = None
+        if ext == ".pdf":
+            # Already a PDF — no conversion needed, just point at itself so
+            # the frontend never has to branch on original file type.
+            version.converted_pdf_url = file_path
+            converted = True
+        else:
+            try:
+                output_dir = os.path.dirname(file_path)
+                pdf_path = convert_to_pdf(file_path, output_dir)
+                version.converted_pdf_url = pdf_path
+                converted = True
+            except ConversionError as e:
+                # Non-fatal: AI checks still run against the original file
+                # regardless (see _run_ai_checks_and_store). The reviewer
+                # PDF viewer just won't have a converted PDF to show for
+                # this version until re-attempted.
+                error = str(e)
+
+        db.commit()
+
+        asyncio.run(get_manager().publish(
+            f"conference:{sub.conference_id}:queue",
+            {
+                "type": "submission_version.pdf_converted",
+                "submission_id": submission_id,
+                "version_id": version_id,
+                "converted": converted,
+                "error": error,
+            },
+        ))
+    finally:
+        db.close()
+
+
+def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str) -> None:
     """Runs in a worker thread via FastAPI's BackgroundTasks. Uses
     database_module.SessionLocal() (late-bound attribute access, not a name
     captured at import time) so conftest.py's test override actually reaches
@@ -69,6 +128,8 @@ def _run_ai_checks_and_store(submission_id: str, file_path: str) -> None:
     from app.ai.table_figure_check import run_table_figure_check
     from app.core.gate_engine import evaluate_submission_gates
     from app.core.ws_manager import get_manager
+
+    _convert_to_pdf_and_store(submission_id, version_id, file_path)
 
     db = database_module.SessionLocal()
     try:
@@ -187,7 +248,7 @@ async def upload_file(
     sub.status = "processing"
     db.commit()
 
-    background_tasks.add_task(_run_ai_checks_and_store, submission_id, dest_path)
+    background_tasks.add_task(_run_ai_checks_and_store, submission_id, version.id, dest_path)
 
     return version
 
