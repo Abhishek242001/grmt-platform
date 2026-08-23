@@ -224,6 +224,94 @@ function AiTextDetectionReportCard({ report }: { report: api.AIReport }) {
   );
 }
 
+function CitationReportCard({ report }: { report: api.AIReport }) {
+  let result: api.CitationCheckResult | null = null;
+  try {
+    result = report.result_json ? JSON.parse(report.result_json) : null;
+  } catch {
+    result = null;
+  }
+
+  if (!result || result.status !== 'complete') {
+    return (
+      <div className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm text-[var(--color-ink)]/50">
+        Citation check unavailable: {result?.error ?? 'unknown error'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 border-t border-[var(--color-line)] pt-4">
+      <div className="flex items-center gap-4">
+        <span className="font-bold">Citations</span>
+        {result.score !== null ? (
+          <span className="font-display-bold text-2xl text-[var(--color-accent)]">{result.score}</span>
+        ) : (
+          <span className="text-xs text-[var(--color-ink)]/50">No citations detected</span>
+        )}
+        {result.total_citations !== undefined && (
+          <span className="text-xs text-[var(--color-ink)]/50">
+            {result.total_citations} citations, {result.total_bibliography_entries} references
+          </span>
+        )}
+      </div>
+
+      {result.issues.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {result.issues.map((issue, i) => (
+            <li key={i} className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm text-[var(--color-ink)]/70">
+              {issue}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function LogicalConsistencyReportCard({ report }: { report: api.AIReport }) {
+  let result: api.LogicalConsistencyResult | null = null;
+  try {
+    result = report.result_json ? JSON.parse(report.result_json) : null;
+  } catch {
+    result = null;
+  }
+
+  if (!result || result.status !== 'complete') {
+    return (
+      <div className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm text-[var(--color-ink)]/50">
+        Logical consistency check unavailable: {result?.error ?? 'unknown error'}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 border-t border-[var(--color-line)] pt-4">
+      <div className="flex items-center gap-4">
+        <span className="font-bold">Logical Consistency</span>
+        <span className={`font-display-bold text-2xl ${result.consistent ? 'text-[var(--color-accent)]' : 'text-red-600'}`}>
+          {result.consistent ? 'Consistent' : 'Inconsistent'}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-[var(--color-ink)]/40">
+        Compares the abstract against the conclusion only — an AI judgment call, informational for reviewers, never an automatic reject.
+      </p>
+
+      {result.findings && result.findings.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {result.findings.map((finding, i) => (
+            <li key={i} className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm text-[var(--color-ink)]/70">
+              <p><span className="font-bold">Abstract:</span> {finding.abstract_claim}</p>
+              <p className="mt-1"><span className="font-bold">Conclusion:</span> {finding.conclusion_statement}</p>
+              <p className="mt-1 text-[var(--color-ink)]/50">{finding.explanation}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading } = useAuth();
@@ -431,6 +519,12 @@ export default function SubmissionDetailPage() {
                 }
                 if (report.check_type === 'ai_text') {
                   return <AiTextDetectionReportCard key={report.id} report={report} />;
+                }
+                if (report.check_type === 'citation') {
+                  return <CitationReportCard key={report.id} report={report} />;
+                }
+                if (report.check_type === 'logical_consistency') {
+                  return <LogicalConsistencyReportCard key={report.id} report={report} />;
                 }
                 return (
                   <div key={report.id} className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm">

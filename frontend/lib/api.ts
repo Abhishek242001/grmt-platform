@@ -346,6 +346,32 @@ export interface AiTextDetectionResult {
   max_ai_percentage?: number;
 }
 
+export interface CitationCheckResult {
+  status: string;
+  error?: string;
+  broken_citations?: string[];
+  uncited_references?: string[];
+  total_citations?: number;
+  total_bibliography_entries?: number;
+  score: number | null;
+  issues: string[];
+}
+
+export interface LogicalConsistencyFinding {
+  abstract_claim: string;
+  conclusion_statement: string;
+  explanation: string;
+}
+
+export interface LogicalConsistencyResult {
+  status: string;
+  error?: string;
+  consistent?: boolean;
+  findings?: LogicalConsistencyFinding[];
+  score: number | null;
+  issues: string[];
+}
+
 export function getAiReports(submissionId: string): Promise<AIReport[]> {
   return request<AIReport[]>(`/submissions/${submissionId}/ai-report`);
 }

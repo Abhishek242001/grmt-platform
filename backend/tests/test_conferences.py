@@ -83,6 +83,42 @@ def test_never_hard_gate_on_ai_text_rejected_at_api_layer(client):
     assert r.status_code == 422
 
 
+def test_never_hard_gate_on_logical_consistency_rejected_at_api_layer(client):
+    """logical_consistency was added to NEVER_HARD_GATE alongside plagiarism/
+    ai_text — the first genuine LLM-judgment check (not deterministic
+    extraction), same real false-positive risk category. Confirms the
+    existing Pydantic-level enforcement (GateRuleIn.validate_never_hard_gate)
+    picks up the newly-added set member automatically, without needing any
+    separate code change for this specific check_type."""
+    token = _signup(client, "org1@example.com", role="organizer")
+    r = client.post("/api/conferences", json={"name": "ICSE 2026"}, headers=_auth(token))
+    conf_id = r.json()["id"]
+
+    r = client.put(
+        f"/api/conferences/{conf_id}/gate-rules",
+        json=[{"check_type": "logical_consistency", "is_hard_gate": True}],
+        headers=_auth(token),
+    )
+    assert r.status_code == 422
+
+
+def test_citation_check_can_be_configured_as_a_hard_gate(client):
+    """Unlike ai_text/plagiarism/logical_consistency, citation completeness
+    IS a deterministic check (broken-reference detection, not an AI
+    judgment call) — confirms it's genuinely allowed to hard-gate, not
+    accidentally swept into NEVER_HARD_GATE."""
+    token = _signup(client, "org1@example.com", role="organizer")
+    r = client.post("/api/conferences", json={"name": "ICSE 2026"}, headers=_auth(token))
+    conf_id = r.json()["id"]
+
+    r = client.put(
+        f"/api/conferences/{conf_id}/gate-rules",
+        json=[{"check_type": "citation", "is_hard_gate": True, "threshold": 90.0}],
+        headers=_auth(token),
+    )
+    assert r.status_code == 200
+
+
 def test_organizer_can_patch_own_conference(client):
     token = _signup(client, "org1@example.com", role="organizer")
     r = client.post("/api/conferences", json={"name": "Old Name"}, headers=_auth(token))

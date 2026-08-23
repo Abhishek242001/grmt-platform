@@ -17,13 +17,16 @@
 ## 2. Current Overall Status
 
 - **Phase 1 (Foundation, Auth, Backend, Frontend): COMPLETE.**
-- **Phase 2 (AI Models): 4 of 7 checks built and wired into the live pipeline.** 3 remain (citation, plagiarism, logical_consistency). (Note: earlier revisions of this doc said "8 checks" — stale carryover from an early planning draft; `CHECK_TYPES` in `app/models/conferences.py` is the authoritative source and only ever defined 7.)
+- **Phase 2 (AI Models): 6 of 7 checks built and wired into the live pipeline.** Only plagiarism remains — blocked on a real prerequisite (no reference corpus exists yet), not a coding gap. (Note: earlier revisions of this doc said "8 checks" — stale carryover from an early planning draft; `CHECK_TYPES` in `app/models/conferences.py` is the authoritative source and only ever defined 7.)
+- **WebSocket live-push and the real `/resubmit` file upload fix are also DONE** — both were paused mid-project to focus on AI checks, then finished. Nothing from the original roadmap is still paused. See §9 for what's actually left.
 
-Backend test suite: **205/205 passing** as of the last verified state. Frontend has a genuine working reviewer PDF viewer with annotations (§4.1) AND a genuine working AI-generated-content detection card with highlighted flagged paragraphs (§4.3) — both verified with real headless-browser runs against a real running instance, not just build checks.
+Backend test suite: **261/261 passing** as of the last verified state. Frontend has a genuine working reviewer PDF viewer with annotations (§4.1), a genuine working AI-generated-content detection card with highlighted flagged paragraphs (§4.3), and citation/logical-consistency report cards (§4.4/§4.5) — all verified with real headless-browser runs against a real running instance, not just build checks.
 
 **⚠️ The AI-generated-text detection check (§4.3) has a long, important saga — READ IT BEFORE TOUCHING THIS CHECK AGAIN.** Four different approaches were tried. Three failed with real, replicated negative results (not bugs — the actual detection signal wasn't there). The fourth (a pretrained academic-domain classifier, `followsci/bert-ai-text-detector`) is what's actually wired in now, and it is NOT highly accurate — it's a reasonable-effort starting point with known real weaknesses (misses adversarially-styled or closely-paraphrased AI text). §4.3 has the full decision record, every real number from every real test, and what a proper fix (fine-tuning on real academic-domain datasets) would need. Don't re-attempt Binoculars or Fast-DetectGPT at small model scale — that's already been tried twice and failed consistently.
 
-**Priority order note (from earlier in the project, still relevant): WebSocket wiring and the `/resubmit` file-upload fix are still paused**, deliberately, in favor of AI-check work. Not forgotten — see §9 for the historical ordering and what's still deferred.
+**⚠️ Citation completeness (§4.4) and logical consistency (§4.5) are built and unit-tested, but GROBID and Ollama were never actually run** — no access to either service in the environment they were built in. Both need a real verification pass on an actual Studio (§7.3b/§7.3c) before being fully trusted, the same "written but unverified" category every GPU/external-service check this session started in.
+
+**§9 is the section to read if resuming this project — it has the real, current "what's left" list, not the stale one that used to be here.**
 
 ---
 
@@ -59,7 +62,7 @@ Next.js 16.3.1, React 19.0.0, zero known vulnerabilities.
 
 ## 4. Phase 2 — AI Models: Detailed Status
 
-### 4.1 What's DONE (4 of 7 checks — grammar, format, table_figure below; ai_text has its own §4.3 given its complexity)
+### 4.1 What's DONE (6 of 7 checks — grammar, format, table_figure below; ai_text/citation/logical_consistency have their own §4.3/§4.4/§4.5 given their complexity)
 
 #### Grammar check (`backend/app/ai/grammar_check.py`) — DONE
 Uses self-hosted **LanguageTool** (Docker container, `erikvl87/languagetool`, port 8010).
@@ -134,13 +137,11 @@ Frontend (`react-pdf`, wraps pdf.js): page navigation, click-to-annotate (review
 - Log in as a *different* user (the paper's own researcher, not the annotation's reviewer-author) and confirm: the pin and comment are visible, the "click to annotate" affordance is correctly hidden (not a reviewer), and the Delete button is correctly hidden (not the annotation's author)
 - Confirmed the only console errors present were pre-existing and unrelated (`/images/logo.jpg` missing asset, `/decision` 404 for a submission with no decision yet — both predate this work)
 
-### 4.2 What's NOT built (3 of 7 checks remain)
+### 4.2 What's NOT built (1 of 7 checks remains)
 
 | Check | Model/Tool needed | Blocker |
 |---|---|---|
-| **Citation completeness** | GROBID | Needs GROBID Docker service stood up (not done), needs PDF input specifically — no longer blocked on that (PDF pipeline exists), just not started |
 | **Plagiarism/similarity** | BGE-M3 + FAISS | Needs a reference corpus of papers to compare against — doesn't exist yet, real prerequisite, not a shortcut-able gap |
-| **Logical consistency** | Qwen2.5-7B-Instruct via Ollama | Needs Ollama + model download on the GPU Studio; single model, moderate GPU setup, not started |
 
 ### 4.3 AI-generated-text detection — DONE, but read the full saga before touching this again
 
@@ -209,6 +210,30 @@ Fine-tuning is no longer blocked on data collection the way it originally seemed
 | **Zero-shot with the original Falcon-7B pair** (if ever revisited despite attempts 1-2's failure at smaller scale) | The specific, most-validated Binoculars configuration | A100 40GB or L40S 48GB |
 | **Multi-method ensemble** (several approaches cross-validating) | Meaningfully more robust, closer to current research | A100 80GB |
 
+### 4.4 Citation completeness — DONE, deterministic, no GPU risk
+
+Built and fully unit-tested (18 tests: 10 pure XML-parsing, 8 mocked orchestration) in one pass, unlike ai_text's four-attempt saga — this check is deterministic extraction/comparison, the same category as table_figure_check.py, not an AI judgment call.
+
+- **`backend/app/ai/citation_extraction.py`** — parses GROBID's TEI XML (confirmed against GROBID's own documentation, not assumed): in-text citations are `<ref type="bibr" target="#bN">`, bibliography entries are `<biblStruct xml:id="bN">` inside `<listBibl>`. Pure set comparison finds `broken_citations` (cited but no matching bibliography entry — a real defect) and `uncited_references` (in the bibliography but never cited — a *softer* signal, could be a legitimate "further reading" entry, deliberately doesn't affect the score).
+- **`backend/app/ai/citation_check.py`** — the GROBID HTTP client (`POST /api/processFulltextDocument`, PDF as multipart field `input`). PDF-only, same reasoning as format-compliance — a `.docx` submission uses the already-converted PDF from the Word→PDF pipeline (§4.1), passed in by `submissions.py` rather than looked up independently.
+- Score reflects `broken_citations` only, not `uncited_references` — a deliberate design correction made while building this (see the module docstring): weighting both the same would penalize a stylistic choice (an intentional further-reading entry) as if it were the same kind of problem as a genuinely broken reference.
+- **Can be configured as a hard gate** (confirmed with a test) — unlike ai_text/logical_consistency, this is deterministic, not an AI judgment call, so it doesn't carry the same false-positive risk that justifies excluding those two.
+- **Genuinely unverified beyond mocked tests**: GROBID itself was never actually run (no Docker/GROBID access in the environment this was built in) — see §7.3b for setup and what still needs a real run to confirm.
+- Real robustness fix made while wiring this in: broadened the exception handling around the GROBID HTTP call to catch any unexpected failure shape (not just the two specific `httpx` exception subclasses), not just for its own sake — this also fixed 7 pre-existing tests that broke because their shared `fake_post` mock (used across several unrelated upload-integration tests) didn't expect the `files=` keyword argument GROBID's multipart upload uses, since `httpx.post` is a shared module-level function and monkeypatching it affects every caller, not just the one test intended to target.
+
+### 4.5 Logical consistency — DONE, but genuinely unverified, and deliberately scoped narrow
+
+The first check that's a real LLM **judgment call** (Ollama + Qwen2.5-7B-Instruct reasoning about text), not deterministic extraction — same category of real risk as ai_text's whole saga (§4.3), approached the same way: build it carefully, test everything that can be tested without the real model, and be explicit about what still needs a real run.
+
+**Scope, chosen deliberately narrow**: compares the paper's ABSTRACT against its CONCLUSION specifically — not an open-ended "check the whole paper for any inconsistency," which would be too vague a claim for an LLM to judge reliably and impossible to write a meaningful test against. Real, checkable cases this catches: a claimed accuracy/result number that differs between the two sections, an unconditional claim in the abstract that the conclusion hedges or contradicts, a claimed contribution the conclusion doesn't actually support.
+
+- **`backend/app/ai/logical_consistency_scoring.py`** — pure logic, 20 tests: `extract_abstract_and_conclusion()` (regex-based section extraction, hand-verified against several real edge cases — missing sections, no trailing section after CONCLUSION, plural "CONCLUSIONS" heading) and `parse_llm_response()` (defensive JSON validation — strips markdown fences models sometimes wrap responses in despite instructions not to, validates required fields, and catches a real self-contradiction case: the model claiming `"consistent": true` while still listing findings, or `false` with an empty findings list).
+- **`backend/app/ai/logical_consistency_check.py`** — the Ollama HTTP client. Uses Ollama's real **JSON-schema-constrained** structured output (the `format` parameter as a full JSON Schema object, a genuine grammar-level constraint during generation — not just `"format": "json"` or a hopeful prompt instruction), `temperature: 0` for determinism. 8 tests confirm the orchestration (including one that specifically checks only the abstract/conclusion text reaches the model, not the whole document).
+- **Added to `NEVER_HARD_GATE`** alongside `ai_text`/`plagiarism` (see `app/models/conferences.py`) — an unverified LLM judgment must not be able to auto-reject a submission any more than ai_text's real, confirmed bias risk (§4.3) was allowed to. Confirmed the existing Pydantic-level enforcement (`GateRuleIn.validate_never_hard_gate`) picks up the new set member automatically — no separate code change needed there.
+- **Genuinely unverified beyond mocked tests**: Ollama + Qwen2.5-7B-Instruct was never actually run (no Ollama access in the environment this was built in). §7.3c has setup steps AND a manual verification script — a deliberately obvious 95%-vs-80% accuracy inconsistency — run that first before trusting this check on anything real; if it reports `"consistent": true` on that obvious case, something is wrong with the prompt or the model isn't being reached correctly.
+
+**A correction made while building this, worth remembering**: initially believed `NEVER_HARD_GATE`'s API-layer enforcement was missing (a comment claimed it existed but the router body didn't have it) and added a redundant check — turned out the enforcement already existed via a Pydantic `field_validator` on `GateRuleIn` in `schemas/conferences.py`, which the added router-level check could never actually reach (Pydantic validation happens before the endpoint body runs). Removed the dead code and corrected the comment rather than leave two enforcement paths, one of them unreachable — worth the reminder that "I can't find X" should mean "keep looking" before it means "X is missing."
+
 ---
 
 ## 5. Critical Lessons Learned (read before touching AI checks again)
@@ -271,15 +296,23 @@ Spotted by the project owner in a live screenshot, not caught in sandbox testing
 
 Confirmed as cosmetic and fixture-specific, not a platform bug: `python-docx`'s `paragraph.text` never resolves style-level numbering fields at all (only literal run text), which is exactly why the table/figure check still correctly scored this file 100% (6/6) — it only ever saw one "Fig. 1.", matching what was intended. No code change was needed; this is purely a artifact of one specific test file, not the conversion pipeline, the AI checks, or the viewer. Recorded here mainly as a reminder that "it renders" and "it's correct" are different claims, and a live screenshot review can catch things sandbox testing won't — worth continuing to share screenshots/live results, not just pytest/build output.
 
+### 5.11 Monkeypatching a shared module-level function (like `httpx.post`) affects every caller, not just the one test targeting it
+Found while wiring citation completeness in: 7 pre-existing, unrelated upload-integration tests suddenly failed with `TypeError: fake_post() got an unexpected keyword argument 'files'`. Those tests patch `httpx.post` globally (`monkeypatch.setattr(grammar_check_module.httpx, "post", fake_post)`) to fake LanguageTool's response for grammar_check.py — but `httpx` is one shared module object across the whole process, so patching `post` there intercepts *every* caller during that test, including citation_check.py's brand-new GROBID call, which uses a different call shape (`files=` for multipart upload) the old `fake_post(url, data=None, timeout=None)` stub never anticipated.
+
+Two real fixes, not a workaround: (1) broadened both new checks' (citation, logical_consistency) exception handling around their external HTTP calls to catch any unexpected failure — including a `TypeError` from a malformed call — rather than just the two specific `httpx` exception subclasses, which is a genuine robustness improvement on its own (a real GROBID/Ollama deployment could hit plenty of failure modes beyond those two), and incidentally fixed the test breakage as a side effect, confirmed by rerunning rather than assumed. (2) Did NOT touch the old tests' `fake_post` stubs — the broadened exception handling was the right fix at the right layer, not papering over it by making test mocks more permissive.
+
+### 5.12 "I can't find it" should mean "keep looking," not "it must be missing"
+While wiring logical_consistency into the gate system, found a comment in `models/conferences.py` claiming `NEVER_HARD_GATE` was "also enforced at the API layer (routers/conferences.py)" — checked that file, found nothing, concluded the comment was aspirational/stale, and added a redundant enforcement check plus a whole paragraph explaining "the real fix." It wasn't needed: the enforcement genuinely existed, just in `schemas/conferences.py`'s `GateRuleIn.validate_never_hard_gate` Pydantic field validator, which runs before the endpoint body ever executes — meaning the newly-added router-level check was unreachable dead code from the moment it was written. Caught by actually running the existing test suite (`test_never_hard_gate_on_*` tests were already passing, which shouldn't have been possible if the enforcement were genuinely absent) rather than trusting the initial investigation. Removed the dead code, corrected the file-path reference in the original comment (it just pointed at the wrong of two real files), and left this note so the correction itself isn't lost — the mistake was investigating one file, not finding what the comment described, and concluding "missing" instead of "look at the schema file too."
+
 ---
 
 ## 6. Known, Documented Gaps (not silently dropped — explicitly flagged as follow-ups)
 
-- **`POST /submissions/{id}/resubmit` doesn't accept real file uploads yet** — still takes JSON metadata + a placeholder URL, the same shape `/submissions` originally had before real upload support was added. Needs the same real-multipart-upload treatment `/upload` got. Until fixed, resubmission doesn't actually re-run AI checks (status correctly stays `"submitted"`, not `"processing"`, to avoid the stuck-forever bug this would otherwise cause).
-- **WebSocket live-push isn't wired into the AI-report UI** — the submission detail page still polls every 4 seconds. The WS channel and event (`ai_report.check_completed`, and now also `submission_version.pdf_converted`) already exist and are tested; this is a frontend wiring task, not new backend work.
 - **`.docx` column count isn't measured** — returns `None`, documented limitation, would need raw `<w:cols>` XML digging (not yet attempted).
 - **`.docx` page count isn't knowable without rendering** — same reason page-limit check is PDF-only.
 - **Reviewer-facing frontend pages were built early and haven't been re-verified** with the same real-build/real-test rigor later work received.
+- **GROBID and Ollama (citation completeness, logical consistency) were never actually run** — both checks are fully built and unit-tested with mocked external calls, but genuinely unverified end-to-end. See §7.3b/§7.3c for setup and the manual verification steps to run before trusting either on real submissions.
+- **Plagiarism/similarity check** — the one remaining unbuild check (§4.2). Blocked on a real prerequisite (no reference corpus of papers exists yet), not a coding gap — needs that decided/provided before this can start meaningfully.
 
 ---
 
@@ -345,6 +378,51 @@ sleep 15
 curl -s http://localhost:8010/v2/check -d "text=test&language=en-US" | head -c 100
 ```
 
+### 7.3b GROBID (citation completeness check dependency)
+Same Docker pattern as LanguageTool — a self-hosted service on port 8070. Not yet run/verified on any real Studio as of this writing; the citation check's own logic is fully unit-tested (see §4.1's citation completeness section), but the actual GROBID service integration needs a real run to confirm.
+```bash
+docker start grobid 2>/dev/null || docker run -d -p 8070:8070 --name grobid grobid/grobid:0.8.1
+sleep 30  # GROBID's own startup is slower than LanguageTool's — it loads several CRF/DL models on boot
+curl -s http://localhost:8070/api/isalive
+```
+Should return `true`. If `GROBID_URL` needs to point somewhere other than `http://localhost:8070` (citation_check.py's default), set it as an environment variable before starting the backend: `export GROBID_URL=http://your-host:8070`.
+
+### 7.3c Ollama + Qwen2.5-7B-Instruct (logical consistency check dependency)
+The first check needing a real LLM for judgment (not just extraction). Not yet run/verified on any real Studio as of this writing — same disclosure as every GPU-dependent check built this session (see §4.3's Binoculars/Fast-DetectGPT saga for why this matters): the orchestration and prompt are structurally sound but genuinely unverified until run for real.
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama serve &
+sleep 5
+ollama pull qwen2.5:7b-instruct
+```
+The model pull is a real, substantial download (~4-5GB depending on quantization) — expect this to take a few minutes depending on connection speed. Confirm it's working:
+```bash
+curl -s http://localhost:11434/api/tags | grep qwen2.5
+```
+If `OLLAMA_URL` needs to point somewhere other than `http://localhost:11434` (logical_consistency_check.py's default), set it as an environment variable: `export OLLAMA_URL=http://your-host:11434`.
+
+**Manual verification worth running before trusting this check on real submissions** (mirrors the `run_manual_verification()` pattern used for the AI-text-detection checks — same file location convention):
+```bash
+cd ~/grmt-platform/backend
+python3 -c "
+from app.ai.logical_consistency_check import run_logical_consistency_check
+import tempfile, os
+from docx import Document
+
+doc = Document()
+doc.add_paragraph('ABSTRACT')
+doc.add_paragraph('Our method achieves 95% accuracy on the benchmark dataset.')
+doc.add_paragraph('CONCLUSION')
+doc.add_paragraph('We achieved approximately 80% accuracy in our final evaluation.')
+path = os.path.join(tempfile.mkdtemp(), 'test.docx')
+doc.save(path)
+
+result = run_logical_consistency_check(path)
+print(result)
+"
+```
+This is a deliberately obvious inconsistency (95% vs 80%) — if the check reports `"consistent": True` on this, something is wrong with the prompt or the model isn't actually being reached; if it correctly reports `"consistent": False` with a finding about the accuracy discrepancy, the real pipeline is working.
+
 ### 7.4 Start backend
 ```bash
 cd ~/grmt-platform/backend
@@ -374,7 +452,7 @@ URL is `https://3000-<that-suffix>.cloudspaces.litng.ai`
 cd ~/grmt-platform/backend
 python3 -m pytest -v 2>&1 | tail -20
 ```
-Should show whatever passed count matches your last pushed commit on `dev` — apply any not-yet-pushed `updateN.zip` packages you've received on top (check with `git log --oneline -5` and compare against what's been discussed), then re-run to confirm **205 passed** (as of `update31` — the ai_text pipeline wiring).
+Should show whatever passed count matches your last pushed commit on `dev` — apply any not-yet-pushed `updateN.zip` packages you've received on top (check with `git log --oneline -5` and compare against what's been discussed), then re-run to confirm **261 passed** (as of `update34` — citation completeness + logical consistency, the last two checks built).
 
 ---
 
@@ -408,20 +486,45 @@ This is the pattern used throughout Phase 2 — worth continuing, since it verif
 
 ---
 
-## 9. Suggested Next Steps (original ordering — superseded, kept for history; see §2 and §4.3 for the actual current plan)
+## 9. What's Actually Left — Read This First If Resuming
 
-This was the original "easiest to build next" ordering. **It's no longer being followed as-is** — after the PDF viewer shipped, the project owner explicitly chose to pause WebSocket wiring and the resubmit fix in favor of resuming AI-check work. Kept here for historical context, not as the active plan.
+Everything from the original roadmap (§9's old ordering, kept below for archaeology) is done except one item. Current real status:
 
-1. ~~**Table/figure consistency check**~~ — **DONE**, see §4.1.
-2. ~~**Word-to-PDF conversion pipeline**~~ — **DONE**, see §4.1.
-3. ~~**Reviewer PDF viewer & annotations**~~ — **DONE**, see §4.1. Also fixed a real, previously-untested backend gap along the way (the signed-URL scheme never actually served bytes) and a real frontend error-handling gap found live (§5.9).
-4. **Wire WebSocket live-push into the AI-report UI** — **PAUSED**, not abandoned. Replaces polling with the already-built, already-tested real-time channel. Frontend-only work. Pick this up after the AI checks below.
-5. **Fix `/resubmit` to accept real file uploads** — **PAUSED**, not abandoned. Closes the gap flagged in §6, makes resubmission actually re-trigger AI checks.
-6. **AI-generated-text detection (Binoculars, Phi-1.5 pair)** — **← ACTUAL CURRENT TASK.** See §4.3 for the full decision record (why Falcon-7B was rejected, why Phi-1.5, what was set aside, future-scope GPU tiers). If resuming in a new chat, start here.
-7. **GROBID setup + citation-completeness check** — bigger lift (new Docker service, TEI-XML parsing). Unblocked — the Word→PDF pipeline it depended on is done. Good next AI check after AI-text-detection — no GPU risk, similar shape to table/figure check.
-8. **Ollama + Qwen2.5-7B + logical-consistency check** — first genuinely LLM-based check (fuzzy judgment, not deterministic extraction) — will need real thought given to what "logically consistent" means as a testable claim before writing code.
-9. **Reference corpus + plagiarism check** — real prerequisite work (the corpus itself) before this check can even start; not purely a coding task.
-10. **Then:** WebSocket wiring and the resubmit fix, resuming the paused items above.
+1. ~~Table/figure consistency check~~ — **DONE**
+2. ~~Word-to-PDF conversion pipeline~~ — **DONE**
+3. ~~Reviewer PDF viewer & annotations~~ — **DONE**
+4. ~~WebSocket live-push~~ — **DONE** (§4.1 has the details — real per-submission channel, not just the organizer queue channel)
+5. ~~`/resubmit` real file uploads~~ — **DONE**
+6. ~~AI-generated-text detection~~ — **DONE**, see §4.3's full saga (four attempts, three failures, the one that shipped)
+7. ~~Citation completeness~~ — **DONE**, see §4.4 — built and tested, but GROBID itself was never actually run (§7.3b)
+8. ~~Logical consistency~~ — **DONE**, see §4.5 — built and tested, but Ollama+Qwen2.5-7B was never actually run (§7.3c)
+
+**The only thing left: plagiarism/similarity detection (BGE-M3 + FAISS).** Genuinely blocked, not just unstarted — it needs a reference corpus of papers to compare submissions against, and that corpus doesn't exist. This isn't a "go build it" task the way every other check was; it's a "go decide what the corpus should be and get it" task first. Worth raising directly with whoever owns this project rather than guessing at a source.
+
+**Two real verification tasks, not code**, before fully trusting what's already shipped:
+- Run GROBID for real (§7.3b) and confirm citation completeness catches a genuine broken citation on a real paper
+- Run Ollama + Qwen2.5-7B for real (§7.3c) — start with the manual verification script (a deliberately obvious 95%-vs-80% inconsistency) before trusting it on anything real
+
+Beyond that, this project has no other open threads. Everything else — Phase 1, the PDF pipeline, WebSocket, resubmit, and 6 of 7 AI checks — is built, tested, and (as far as `git log` on `dev` reflects what's actually been pushed) deployed.
+
+### Original ordering (superseded, kept for historical context only)
+
+<details>
+<summary>Click to expand the old roadmap — not the current plan, just a record of how priorities shifted over the session</summary>
+
+This was the original "easiest to build next" ordering, before the project owner explicitly paused WebSocket/resubmit to focus on AI checks, then circled back to finish them once the AI-check work stabilized:
+
+1. Table/figure consistency check
+2. Word-to-PDF conversion pipeline
+3. Reviewer PDF viewer & annotations
+4. Wire WebSocket live-push into the AI-report UI
+5. Fix `/resubmit` to accept real file uploads
+6. AI-generated-text detection
+7. GROBID setup + citation-completeness check
+8. Ollama + Qwen2.5-7B + logical-consistency check
+9. Reference corpus + plagiarism check
+
+</details>
 
 ---
 
@@ -446,15 +549,26 @@ backend/app/ai/
 ├── radar_check.py             # RADAR classifier (TrustSafeAI/RADAR-Vicuna-7B) — REJECTED (bias vs. formal writing), unused
 ├── followsci_check.py         # ★ ACTUALLY USED — followsci/bert-ai-text-detector, academic-domain BERT classifier
 ├── text_chunking.py           # ★ ACTUALLY USED — word-count bucketing with original-text character offsets
-└── ai_content_pipeline.py     # ★ ACTUALLY USED — chunk->score->word-weighted-percentage->threshold->highlight orchestration
+├── ai_content_pipeline.py     # ★ ACTUALLY USED — chunk->score->word-weighted-percentage->threshold->highlight orchestration
+│
+├── citation_extraction.py     # ★ ACTUALLY USED — pure TEI-XML parsing/comparison, no GROBID dependency, 10 tests
+├── citation_check.py          # ★ ACTUALLY USED — GROBID HTTP client + orchestration, 8 mocked tests, GROBID itself never actually run
+│
+├── logical_consistency_scoring.py # ★ ACTUALLY USED — pure JSON-response validation + abstract/conclusion section extraction, 20 tests
+└── logical_consistency_check.py   # ★ ACTUALLY USED — Ollama HTTP client + orchestration, 8 mocked tests, Ollama itself never actually run
 
 backend/app/core/
-├── gate_engine.py             # CHECK_EVALUATORS registry (grammar, format, table_figure, ai_text — INVERTED comparison for ai_text), evaluate_submission_gates()
 └── word_to_pdf.py             # LibreOffice headless Word->PDF conversion, per-call profile isolation
 
+backend/app/core/gate_engine.py  # CHECK_EVALUATORS registry (grammar, format, table_figure, citation, logical_consistency — score>=threshold; ai_text — INVERTED, percentage<threshold), evaluate_submission_gates()
+
+backend/app/models/conferences.py  # NEVER_HARD_GATE = {"plagiarism", "ai_text", "logical_consistency"} — DB-enforced (ck_gate_rule_never_hard_gate) AND API-enforced (schemas/conferences.py's GateRuleIn.validate_never_hard_gate)
+
 backend/app/routers/
-├── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload endpoint (now runs 4 checks per upload)
-└── files.py                   # pdf-url (issues signed URL) + pdf-stream (actually serves bytes, signature-only auth) + annotation CRUD
+├── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload + resubmit endpoints (6 checks per upload now)
+├── files.py                   # pdf-url (issues signed URL) + pdf-stream (actually serves bytes, signature-only auth) + annotation CRUD
+├── ws.py                      # submission:{id}:updates channel (researcher/reviewer/organizer scoped) + conference:{id}:queue (organizer/co-admin only)
+└── conferences.py             # gate-rules endpoints
 
 backend/tests/
 ├── test_grammar_check.py
@@ -462,20 +576,26 @@ backend/tests/
 ├── test_format_compliance_check.py
 ├── test_table_figure_check.py
 ├── test_docx_utils.py
-├── test_gate_engine.py        # includes ai_text's inverted-comparison + NEVER_HARD_GATE constraint tests
+├── test_gate_engine.py        # includes ai_text's inverted-comparison + citation/logical_consistency evaluators + NEVER_HARD_GATE tests
 ├── test_word_to_pdf.py        # real soffice conversion, no mocking
 ├── test_files.py              # real signed-URL streaming: fetchable, tamper-rejected, expiry-rejected, real annotation CRUD
+├── test_ws.py                 # includes submission:{id}:updates channel authorization (owner/reviewer/organizer/denied cases) + real live-push confirmation
 ├── test_binoculars_scoring.py # pure math tests for the rejected Binoculars approach
 ├── test_fast_detect_gpt_scoring.py # pure math tests for the rejected Fast-DetectGPT approach
 ├── test_radar_check.py        # mocked orchestration tests for the rejected RADAR approach
 ├── test_followsci_check.py    # mocked orchestration tests for the check actually in use
 ├── test_text_chunking.py      # word-count bucketing, hand-verified
 ├── test_ai_content_pipeline.py # word-weighted aggregation, hand-verified boundary cases, mocked end-to-end orchestration
-└── test_submissions.py        # includes integration tests for all 4 live checks + PDF conversion running together
+├── test_citation_extraction.py  # pure TEI-XML parsing, hand-built realistic GROBID-shaped fixtures
+├── test_citation_check.py       # mocked GROBID orchestration
+├── test_logical_consistency_scoring.py  # JSON validation + section extraction, hand-verified
+├── test_logical_consistency_check.py    # mocked Ollama orchestration
+├── test_conferences.py        # includes NEVER_HARD_GATE tests for all 3 excluded check_types + confirms citation CAN hard-gate
+└── test_submissions.py        # includes integration tests for all 6 live checks + PDF conversion + resubmit re-running checks
 
-frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard + AiTextDetectionReportCard + PdfAnnotationViewer wiring
+frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard + AiTextDetectionReportCard + CitationReportCard + LogicalConsistencyReportCard + PdfAnnotationViewer + WebSocket live-push wiring
 frontend/components/PdfAnnotationViewer.tsx  # react-pdf-based viewer, click-to-annotate (reviewer-gated), percentage-positioned pins
-frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult, AiTextDetectionResult/FlaggedAiChunk, Annotation/SignedUrl types + CRUD functions
+frontend/lib/api.ts                     # All check result types (Grammar/Format/TableFigure/AiTextDetection/Citation/LogicalConsistency) + Annotation/SignedUrl types + resubmit() now takes a real File
 ```
 
 **Explicitly NOT built for ai_text**: true highlighting drawn on top of the rendered PDF (boxes at exact page coordinates) — needs new work mapping flagged text to PDF bounding boxes (PyMuPDF's `search_for()` could do this). What exists is a highlighted-paragraph list in the AI Feedback panel instead — see §4.3's wiring section for the full explanation of this scope decision.

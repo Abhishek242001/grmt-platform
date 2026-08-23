@@ -4,7 +4,16 @@ from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, Foreig
 from app.core.database import Base
 
 CHECK_TYPES = ("grammar", "citation", "format", "plagiarism", "ai_text", "table_figure", "logical_consistency")
-NEVER_HARD_GATE = {"plagiarism", "ai_text"}
+# logical_consistency added here alongside ai_text/plagiarism (not just those
+# two) — it's the first check built that's a genuine LLM *judgment* call
+# (via Ollama + Qwen2.5-7B) rather than deterministic extraction, same
+# category of real false-positive risk that justified excluding ai_text and
+# plagiarism from ever hard-gating. Written and unit-tested, but genuinely
+# unverified against a real running Ollama service (see PROJECT_HANDOFF.md)
+# — an unverified LLM judgment must not be able to auto-reject a submission
+# any more than ai_text's (also real, also independently confirmed) bias
+# risk was allowed to.
+NEVER_HARD_GATE = {"plagiarism", "ai_text", "logical_consistency"}
 _CHECK_TYPES_SQL = ", ".join(f"'{c}'" for c in CHECK_TYPES)
 
 
@@ -33,10 +42,13 @@ class GateRule(Base):
     __table_args__ = (
         UniqueConstraint("conference_id", "check_type", name="uq_gate_rule_conf_check"),
         CheckConstraint(f"check_type IN ({_CHECK_TYPES_SQL})", name="ck_gate_rule_check_type"),
-        # Defense-in-depth: this must also be enforced at the API layer (routers/conferences.py),
+        # Defense-in-depth: this must also be enforced at the API layer (schemas/conferences.py's
+        # GateRuleIn.validate_never_hard_gate field_validator — confirmed present, not just claimed),
         # but the DB is the last line of defense if a row is ever written another way.
+        # logical_consistency added alongside plagiarism/ai_text — see the
+        # NEVER_HARD_GATE constant's comment above for why.
         CheckConstraint(
-            "NOT (is_hard_gate = 1 AND check_type IN ('plagiarism', 'ai_text'))",
+            "NOT (is_hard_gate = 1 AND check_type IN ('plagiarism', 'ai_text', 'logical_consistency'))",
             name="ck_gate_rule_never_hard_gate",
         ),
     )

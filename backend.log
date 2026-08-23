@@ -25,3 +25,12 @@ INFO:     Finished server process [21927]
 INFO:     Started server process [39273]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/routers/conferences.py', 'app/ai/logical_consistency_check.py', 'tests/test_gate_engine.py', 'app/core/gate_engine.py', 'app/models/conferences.py', 'tests/test_submissions.py', 'tests/test_conferences.py', 'app/schemas/conferences.py', 'tests/test_logical_consistency_check.py', 'app/ai/logical_consistency_scoring.py', 'app/ai/citation_check.py', 'app/ai/citation_extraction.py', 'tests/test_citation_check.py', 'tests/test_logical_consistency_scoring.py', 'app/routers/submissions.py', 'tests/test_citation_extraction.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [39273]
+2026-08-23 04:35:10,028 | INFO | grmt.main | dev mode: Base.metadata.create_all() ran against sqlite:///./grmt_dev.db
+INFO:     Started server process [59318]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

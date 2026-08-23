@@ -85,23 +85,62 @@ def _ai_text_passes(result: dict, threshold: float | None) -> bool:
     return percentage < threshold
 
 
+def _citation_passes(result: dict, threshold: float | None) -> bool:
+    # Same score >= threshold shape as format/table_figure — citation
+    # completeness (broken references specifically; uncited references
+    # deliberately don't affect score, see citation_check.py) is a
+    # deterministic fact about the document, same category as those two
+    # checks, so it CAN hard-gate — unlike ai_text/logical_consistency
+    # below, this isn't an AI-judgment call with false-positive risk.
+    if threshold is None:
+        return True
+    score = result.get("score")
+    if score is None:
+        return True
+    return score >= threshold
+
+
+def _logical_consistency_passes(result: dict, threshold: float | None) -> bool:
+    # score >= threshold, same direction as grammar/format/table_figure/
+    # citation (100 = consistent passes, 0 = inconsistent fails — NOT
+    # inverted the way ai_text is). But like ai_text, this can never
+    # actually trigger a hard fail in practice: models/conferences.py's
+    # NEVER_HARD_GATE now includes "logical_consistency" alongside
+    # "plagiarism"/"ai_text" — this is the first check that's a genuine
+    # LLM *judgment* call (Ollama + Qwen2.5-7B reasoning about whether the
+    # abstract and conclusion contradict each other) rather than
+    # deterministic extraction, and it's genuinely unverified against a
+    # real running Ollama service (see PROJECT_HANDOFF.md) — an unverified
+    # AI judgment must not be able to auto-reject a submission any more
+    # than ai_text's real, confirmed bias risk was allowed to.
+    if threshold is None:
+        return True
+    score = result.get("score")
+    if score is None:
+        return True
+    return score >= threshold
+
+
 CHECK_EVALUATORS = {
     "grammar": _grammar_passes,
     "format": _format_passes,
     "table_figure": _table_figure_passes,
     "ai_text": _ai_text_passes,
-    # citation, plagiarism, logical_consistency
-    # register here as each check is built — this is the one place that needs
+    "citation": _citation_passes,
+    "logical_consistency": _logical_consistency_passes,
+    # plagiarism
+    # register here once built — this is the one place that needs
     # a new line added, not a rewrite of the evaluation logic itself.
 }
 
 
 def evaluate_submission_gates(submission_id: str, db: Session) -> str:
     """Evaluates only the checks that have actually COMPLETED for this
-    submission — with 1 of 7 checks currently implemented, this deliberately
-    never returns "ai_review_passed" (that would claim the full pipeline ran
-    clean). It returns "ai_review_hard_failed" if any hard-gated check failed,
-    otherwise "in_human_review" — nothing blocking found among what has run."""
+    submission — with 6 of 7 checks currently implemented (only plagiarism
+    remains), this deliberately never returns "ai_review_passed" (that
+    would claim the full pipeline ran clean). It returns
+    "ai_review_hard_failed" if any hard-gated check failed, otherwise
+    "in_human_review" — nothing blocking found among what has run."""
     sub = db.query(Submission).filter(Submission.id == submission_id).first()
     if sub is None:
         return "unknown"

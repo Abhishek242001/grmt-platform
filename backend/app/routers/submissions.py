@@ -123,6 +123,10 @@ def _convert_to_pdf_and_store(submission_id: str, version_id: str, file_path: st
                 "error": error,
             },
         ))
+        # Returned so _run_ai_checks_and_store can hand the real converted
+        # PDF path to the citation check (GROBID needs a PDF specifically —
+        # see citation_check.py) without querying the DB a second time.
+        return version.converted_pdf_url if converted else None
     finally:
         db.close()
 
@@ -134,18 +138,20 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
     this code — see planning log §26 for why a direct import wouldn't work.
 
     Runs every check that's currently implemented (grammar, format,
-    table_figure, ai_text) — new checks get added to this loop, not a new
-    copy of this whole function."""
+    table_figure, ai_text, citation, logical_consistency) — new checks get
+    added to this loop, not a new copy of this whole function."""
     import asyncio
 
     from app.ai.ai_content_pipeline import run_ai_text_detection_check
+    from app.ai.citation_check import run_citation_check
     from app.ai.format_compliance_check import run_format_compliance_check
     from app.ai.grammar_check import run_grammar_check
+    from app.ai.logical_consistency_check import run_logical_consistency_check
     from app.ai.table_figure_check import run_table_figure_check
     from app.core.gate_engine import evaluate_submission_gates
     from app.core.ws_manager import get_manager
 
-    _convert_to_pdf_and_store(submission_id, version_id, file_path)
+    converted_pdf_path = _convert_to_pdf_and_store(submission_id, version_id, file_path)
 
     db = database_module.SessionLocal()
     try:
@@ -167,6 +173,20 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
             # transformers aren't installed or no GPU is available — see
             # ai_content_pipeline.run_pipeline's try/except around scoring.
             ("ai_text", lambda: run_ai_text_detection_check(file_path)),
+            # GROBID needs a real PDF specifically — uses the converted
+            # path from _convert_to_pdf_and_store above (works for both
+            # .docx submissions, once converted, and .pdf submissions,
+            # which point at themselves). If conversion failed or hasn't
+            # completed, converted_pdf_path is None and citation_check.py
+            # returns a clear "no PDF available" error rather than crashing.
+            ("citation", lambda: run_citation_check(converted_pdf_path or file_path)),
+            # First genuinely LLM-judgment check (Ollama + Qwen2.5-7B) —
+            # needs Ollama running and a real GPU; gracefully degrades to
+            # {"status": "error", ...} if unreachable, same pattern as
+            # ai_text. Can never hard-gate regardless of result — see
+            # gate_engine.py's _logical_consistency_passes and
+            # models/conferences.py's NEVER_HARD_GATE.
+            ("logical_consistency", lambda: run_logical_consistency_check(file_path)),
         ]
 
         for check_type, run_fn in checks_to_run:
