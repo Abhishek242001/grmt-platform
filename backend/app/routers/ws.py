@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.ws_manager import get_manager
 from app.core.ws_tickets import consume_ticket, issue_ticket
-from app.models.conferences import Conference, ConferenceCoAdmin
+from app.models.conferences import Conference, ConferenceCoAdmin, ConferenceReviewer
 from app.models.core import User
 from app.schemas.ws import TicketOut
 
@@ -37,6 +37,43 @@ def _authorize_channel(channel: str, user: User, db: Session) -> bool:
             .first() is not None
         )
         return is_coadmin
+
+    if channel.startswith("submission:") and channel.endswith(":updates"):
+        # Distinct from conference:{id}:queue above on purpose — that
+        # channel is organizer/co-admin only (it fans out every submission
+        # in the conference, appropriate for a queue-overview page but a
+        # real over-exposure if a researcher or reviewer could subscribe to
+        # it just to watch their own one submission). This channel is
+        # scoped to exactly one submission, so a researcher (submission
+        # owner) and any reviewer actually assigned to it can subscribe too
+        # — needed for the submission detail page's live AI-report updates,
+        # which researchers and reviewers view just as much as organizers.
+        from app.models.submissions import Submission
+
+        submission_id = channel.split(":")[1]
+        sub = db.query(Submission).filter(Submission.id == submission_id).first()
+        if sub is None:
+            return False
+        if user.role == "platform_admin":
+            return True
+        if sub.researcher_id == user.id:
+            return True
+        conf = db.query(Conference).filter(Conference.id == sub.conference_id).first()
+        if conf and conf.organizer_id == user.id:
+            return True
+        is_coadmin = (
+            db.query(ConferenceCoAdmin)
+            .filter(ConferenceCoAdmin.conference_id == sub.conference_id, ConferenceCoAdmin.user_id == user.id)
+            .first() is not None
+        )
+        if is_coadmin:
+            return True
+        is_assigned_reviewer = (
+            db.query(ConferenceReviewer)
+            .filter(ConferenceReviewer.conference_id == sub.conference_id, ConferenceReviewer.reviewer_id == user.id)
+            .first() is not None
+        )
+        return is_assigned_reviewer
 
     if channel.startswith("admin:"):
         return user.role == "platform_admin"

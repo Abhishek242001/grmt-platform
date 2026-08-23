@@ -16,3 +16,12 @@ INFO:     Finished server process [19104]
 INFO:     Started server process [21927]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'app/routers/submissions.py', 'tests/test_ws.py', 'tests/test_submissions.py', 'app/routers/ws.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21927]
+2026-08-23 04:05:21,609 | INFO | grmt.main | dev mode: Base.metadata.create_all() ran against sqlite:///./grmt_dev.db
+INFO:     Started server process [39273]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

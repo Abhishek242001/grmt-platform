@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core import database as database_module
@@ -108,6 +108,21 @@ def _convert_to_pdf_and_store(submission_id: str, version_id: str, file_path: st
                 "error": error,
             },
         ))
+        # Also to the per-submission channel — conference:queue is
+        # organizer/co-admin only, but the submission detail page (where
+        # this actually matters, for the PDF viewer) is viewed by the
+        # researcher and assigned reviewers too. See ws.py's
+        # _authorize_channel for the scoping.
+        asyncio.run(get_manager().publish(
+            f"submission:{submission_id}:updates",
+            {
+                "type": "submission_version.pdf_converted",
+                "submission_id": submission_id,
+                "version_id": version_id,
+                "converted": converted,
+                "error": error,
+            },
+        ))
     finally:
         db.close()
 
@@ -174,10 +189,23 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
                     "check_status": report.status,
                 },
             ))
+            asyncio.run(get_manager().publish(
+                f"submission:{submission_id}:updates",
+                {
+                    "type": "ai_report.check_completed",
+                    "submission_id": submission_id,
+                    "check_type": check_type,
+                    "check_status": report.status,
+                },
+            ))
 
         new_status = evaluate_submission_gates(submission_id, db)
         asyncio.run(get_manager().publish(
             f"conference:{sub.conference_id}:queue",
+            {"type": "submission.status_changed", "submission_id": submission_id, "submission_status": new_status},
+        ))
+        asyncio.run(get_manager().publish(
+            f"submission:{submission_id}:updates",
             {"type": "submission.status_changed", "submission_id": submission_id, "submission_status": new_status},
         ))
     finally:
@@ -300,13 +328,22 @@ def get_submission_history(submission_id: str, user: User = Depends(get_current_
     )
 
 
-@router.post("/{submission_id}/resubmit", response_model=SubmissionOut)
+@router.post("/{submission_id}/resubmit", response_model=SubmissionVersionOut)
 async def resubmit(
     submission_id: str,
-    payload: ResubmitRequest,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    title: str | None = Form(None),
     user: User = Depends(require_role("researcher")),
     db: Session = Depends(get_db),
 ):
+    """Mirrors /upload's real-multipart pattern exactly — this used to
+    accept JSON metadata + a placeholder URL (the same pre-upload shape
+    /submissions originally had) and could never honestly claim
+    "processing", since no background task would ever run to resolve
+    that status. Real fix, not a workaround: real file bytes in, a real
+    new SubmissionVersion, a real background task, a real "processing"
+    status that a real check run will actually resolve."""
     sub = db.query(Submission).filter(Submission.id == submission_id).first()
     if sub is None or sub.researcher_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
@@ -316,6 +353,10 @@ async def resubmit(
             detail=f"Submission is not in a resubmittable state (current status: {sub.status})",
         )
 
+    ALLOWED_EXTENSIONS = (".docx", ".pdf")
+    if not file.filename or not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only .docx or .pdf files are accepted")
+
     latest = (
         db.query(SubmissionVersion)
         .filter(SubmissionVersion.submission_id == submission_id)
@@ -324,30 +365,38 @@ async def resubmit(
     )
     next_version = (latest.version_number + 1) if latest else 1
 
-    db.add(SubmissionVersion(
+    version_dir = os.path.join(
+        _BACKEND_DIR, settings.upload_root, "submissions", submission_id, f"v{next_version}"
+    )
+    os.makedirs(version_dir, exist_ok=True)
+    dest_path = os.path.join(version_dir, file.filename)
+    with open(dest_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    version = SubmissionVersion(
         submission_id=submission_id,
         version_number=next_version,
-        original_filename=payload.original_filename,
-        original_file_url=payload.original_file_url,
-    ))
-    if payload.title:
-        sub.title = payload.title
-    # Stays "submitted", not "processing" — this endpoint doesn't accept real
-    # file bytes yet (JSON metadata + a placeholder URL, the same pre-upload
-    # shape /submissions originally had), so no check actually runs here.
-    # Claiming "processing" without a background task to ever resolve it
-    # would recreate the exact stuck-forever bug the real /upload flow fixed
-    # (planning log §26) — this is a documented gap, not silently dropped:
-    # resubmit needs the same real-multipart-upload treatment as /upload,
-    # as a follow-up, before this can honestly say "processing".
-    sub.status = "submitted"
+        original_filename=file.filename,
+        original_file_url=dest_path,
+    )
+    db.add(version)
+
+    if title:
+        sub.title = title
+    sub.status = "processing"  # honestly "processing" now — a real background task will resolve it
     db.commit()
-    db.refresh(sub)
+    db.refresh(version)
+
+    background_tasks.add_task(_run_ai_checks_and_store, submission_id, version.id, dest_path)
 
     from app.core.ws_manager import get_manager
     await get_manager().publish(
         f"conference:{sub.conference_id}:queue",
         {"type": "submission.resubmitted", "submission_id": sub.id, "title": sub.title, "status": sub.status},
     )
+    await get_manager().publish(
+        f"submission:{sub.id}:updates",
+        {"type": "submission.resubmitted", "submission_id": sub.id, "title": sub.title, "status": sub.status},
+    )
 
-    return sub
+    return version

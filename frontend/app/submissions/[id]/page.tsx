@@ -265,23 +265,77 @@ export default function SubmissionDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, id]);
 
-  // Grammar check runs in the background after upload — poll briefly while
-  // we're waiting on it, rather than require a manual refresh. A live WS
-  // push here (ai_report.check_completed, already emitted server-side) is
-  // the natural next upgrade over polling.
+  // Live push via WebSocket — subscribes to submission:{id}:updates (scoped
+  // to exactly this submission; distinct from conference:{id}:queue, which
+  // is organizer/co-admin only and wouldn't authorize a researcher or
+  // reviewer viewing their own/assigned submission's detail page). Falls
+  // back to the polling effect below if the connection never opens or
+  // drops — WS is the fast path, not the only path.
+  const [wsConnected, setWsConnected] = useState(false);
   useEffect(() => {
+    if (!user || !id) return;
+
+    let socket: WebSocket | null = null;
+    let cancelled = false;
+
+    api.getWsTicket().then(({ ticket }) => {
+      if (cancelled) return;
+      const wsBase = process.env.NEXT_PUBLIC_WS_BASE_URL || '/api/ws';
+      socket = new WebSocket(`${wsBase}?ticket=${ticket}`);
+
+      socket.onopen = () => {
+        socket?.send(JSON.stringify({ action: 'subscribe', channel: `submission:${id}:updates` }));
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'subscribed') {
+            setWsConnected(true);
+            return;
+          }
+          if (
+            msg.type === 'ai_report.check_completed' ||
+            msg.type === 'submission_version.pdf_converted' ||
+            msg.type === 'submission.status_changed' ||
+            msg.type === 'submission.resubmitted'
+          ) {
+            reload();
+          }
+        } catch {
+          // malformed frame — ignore rather than crash the page over a bad push
+        }
+      };
+
+      socket.onclose = () => setWsConnected(false);
+      socket.onerror = () => setWsConnected(false);
+    }).catch(() => setWsConnected(false));
+
+    return () => {
+      cancelled = true;
+      socket?.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, id]);
+
+  // Fallback polling — only runs while WS isn't connected, so a working
+  // live-push connection means zero polling traffic, but a dropped/blocked
+  // WebSocket (proxy issues, browser extension, etc.) still degrades
+  // gracefully to the same behavior this page had before WS existed.
+  useEffect(() => {
+    if (wsConnected) return;
     if (!submission || submission.status !== 'processing' || aiReports.length > 0) return;
     const interval = setInterval(reload, 4000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [submission, aiReports]);
+  }, [submission, aiReports, wsConnected]);
 
   async function handleResubmit(e: FormEvent) {
     e.preventDefault();
     if (!file || !id) return;
     setResubmitting(true);
     try {
-      await api.resubmit(id, { original_filename: file.name, original_file_url: `placeholder://uploads/${file.name}` });
+      await api.resubmit(id, file);
       reload();
     } catch (err) {
       setError(err instanceof api.ApiError ? err.detail : 'Resubmit failed');

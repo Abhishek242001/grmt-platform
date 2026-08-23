@@ -178,9 +178,10 @@ def test_resubmit_requires_revise_resubmit_status(client):
     r = _submit(client, res_token, conf_id)
     sub_id = r.json()["id"]
 
+    docx_bytes = _make_docx_bytes(["Resubmission attempt content."])
     r = client.post(
         f"/api/submissions/{sub_id}/resubmit",
-        json={"original_filename": "v2.docx", "original_file_url": "placeholder://uploads/v2.docx"},
+        files={"file": ("v2.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
         headers=_auth(res_token),
     )
     assert r.status_code == 400
@@ -194,12 +195,81 @@ def test_other_researcher_cannot_resubmit_someone_elses_paper(client):
     r = _submit(client, res1, conf_id)
     sub_id = r.json()["id"]
 
+    docx_bytes = _make_docx_bytes(["Resubmission attempt content."])
     r = client.post(
         f"/api/submissions/{sub_id}/resubmit",
-        json={"original_filename": "v2.docx", "original_file_url": "placeholder://uploads/v2.docx"},
+        files={"file": ("v2.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
         headers=_auth(res2),
     )
     assert r.status_code == 404
+
+
+def test_resubmit_with_real_file_creates_new_version_and_reruns_checks(client, monkeypatch):
+    """The actual fix: resubmit used to accept JSON metadata + a placeholder
+    URL and could never honestly claim "processing" — this confirms real
+    file bytes in, a real new SubmissionVersion out, status genuinely
+    "processing", and the same real AI-check pipeline actually re-running
+    (mirrors the /upload integration tests' mocking pattern exactly)."""
+
+    def fake_post(url, data=None, timeout=None):
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"matches": []}
+
+        return FakeResponse()
+
+    import app.ai.grammar_check as grammar_check_module
+    monkeypatch.setattr(grammar_check_module.httpx, "post", fake_post)
+
+    org_token = _signup(client, "org@example.com", role="organizer")
+    conf_id = _make_conference(client, org_token)
+    res_token = _signup(client, "res@example.com", role="researcher")
+    r = _submit(client, res_token, conf_id)
+    sub_id = r.json()["id"]
+
+    # Move the submission into a resubmittable state directly via DB, same
+    # pattern the hard-gate test uses elsewhere in this file — there's no
+    # public endpoint to force this status as part of normal flow.
+    from app.core import database as database_module
+    from app.models.submissions import Submission
+    db = database_module.SessionLocal()
+    try:
+        sub = db.query(Submission).filter(Submission.id == sub_id).first()
+        sub.status = "revise_resubmit"
+        db.commit()
+    finally:
+        db.close()
+
+    docx_bytes = _make_docx_bytes(["Revised content after addressing reviewer feedback."])
+    r = client.post(
+        f"/api/submissions/{sub_id}/resubmit",
+        files={"file": ("v2.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        data={"title": "Revised Paper Title"},
+        headers=_auth(res_token),
+    )
+    assert r.status_code == 200
+    version = r.json()
+    assert version["version_number"] == 2
+    assert version["original_filename"] == "v2.docx"
+
+    r = client.get(f"/api/submissions/{sub_id}", headers=_auth(res_token))
+    submission = r.json()
+    assert submission["title"] == "Revised Paper Title"
+    # "processing" only means something now that a real background task
+    # actually resolves it — confirmed below, not just asserted here.
+    assert submission["status"] in ("processing", "ai_review_hard_failed", "in_human_review")
+
+    r = client.get(f"/api/submissions/{sub_id}/history", headers=_auth(res_token))
+    history = r.json()
+    assert len(history) == 2  # original v1 + the new resubmitted v2
+
+    r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
+    reports = r.json()
+    assert len(reports) == 4  # the real checks actually ran again on the new version
+    assert set(r["check_type"] for r in reports) == {"grammar", "format", "table_figure", "ai_text"}
 
 
 def test_reviewer_sees_assigned_submissions_only(client):

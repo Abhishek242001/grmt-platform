@@ -254,14 +254,19 @@ export function getSubmissionHistory(id: string): Promise<SubmissionVersion[]> {
   return request<SubmissionVersion[]>(`/submissions/${id}/history`);
 }
 
-export function resubmit(
-  id: string,
-  input: { title?: string; original_filename: string; original_file_url: string }
-): Promise<Submission> {
-  return request<Submission>(`/submissions/${id}/resubmit`, {
+export async function resubmit(id: string, file: File, title?: string): Promise<SubmissionVersion> {
+  const form = new FormData();
+  form.append('file', file);
+  if (title) form.append('title', title);
+  const resp = await fetch(`${API_BASE_URL}/submissions/${id}/resubmit`, {
     method: 'POST',
-    body: JSON.stringify(input),
+    headers: authHeaders(), // no Content-Type — browser sets the multipart boundary itself
+    body: form,
   });
+  if (!resp.ok) {
+    throw new ApiError(resp.status, await parseErrorDetail(resp));
+  }
+  return resp.json();
 }
 
 export function conferenceQueue(conferenceId: string): Promise<Submission[]> {
