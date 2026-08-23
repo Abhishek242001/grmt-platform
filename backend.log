@@ -1,72 +1,18 @@
 nohup: ignoring input
 INFO:     Will watch for changes in these directories: ['/teamspace/studios/this_studio/grmt-platform/backend']
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [6258] using WatchFiles
-2026-08-21 18:09:29,622 | INFO | grmt.main | dev mode: Base.metadata.create_all() ran against sqlite:///./grmt_dev.db
-INFO:     Started server process [6261]
+INFO:     Started reloader process [19092] using WatchFiles
+2026-08-23 03:34:30,169 | INFO | grmt.main | dev mode: Base.metadata.create_all() ran against sqlite:///./grmt_dev.db
+INFO:     Started server process [19104]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     127.0.0.1:55584 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 401 Unauthorized
-INFO:     192.168.64.41:0 - "POST /api/auth/refresh HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "POST /api/auth/refresh HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4 HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/history HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/ai-report HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/reviews HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/decision HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4 HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/history HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/decision HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/ai-report HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/reviews HTTP/1.1" 404 Not Found
-WARNING:  WatchFiles detected changes in 'tests/test_files.py', 'app/routers/files.py'. Reloading...
+INFO:     127.0.0.1:60282 - "GET /api/health HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'tests/test_gate_engine.py', 'tests/test_submissions.py', 'tests/test_text_chunking.py', 'app/ai/ai_text_detection_check.py', 'app/ai/fast_detect_gpt_scoring.py', 'app/ai/radar_check.py', 'tests/test_followsci_check.py', 'app/ai/followsci_check.py', 'tests/test_radar_check.py', 'tests/test_ai_content_pipeline.py', 'app/ai/text_chunking.py', 'app/ai/ai_content_pipeline.py', 'tests/test_fast_detect_gpt_scoring.py', 'tests/test_binoculars_scoring.py', 'app/core/gate_engine.py', 'app/ai/binoculars_scoring.py', 'app/ai/fast_detect_gpt_check.py', 'app/routers/submissions.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [6261]
-2026-08-21 18:12:06,674 | INFO | grmt.main | dev mode: Base.metadata.create_all() ran against sqlite:///./grmt_dev.db
-INFO:     Started server process [16546]
+INFO:     Finished server process [19104]
+2026-08-23 03:39:15,013 | INFO | grmt.main | dev mode: Base.metadata.create_all() ran against sqlite:///./grmt_dev.db
+INFO:     Started server process [21927]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/history HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4 HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/decision HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/reviews HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/ai-report HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4 HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/history HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/decision HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/reviews HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/ai-report HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/pdf-url HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/annotations HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/annotations HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/pdf-url HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/pdf-stream?expires=1787336295&signature=5aa18e5d138f741b0a4de0a9d272f3979cd69b3f8922fd3672728a38fc0dd565 HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4 HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/history HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/decision HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/ai-report HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/reviews HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4 HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/history HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/decision HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/reviews HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/submissions/6d95ee7f-3793-4345-8440-aca76272dca4/ai-report HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/pdf-url HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/annotations HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/pdf-url HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/annotations HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/submissions/versions/d1bb98d3-dade-4f14-ad85-d1538e29a12a/pdf-stream?expires=1787336321&signature=1b713591ba3d334ee23b8d21db2c5666e7c5c0bc860651e7d34efc35232cbd17 HTTP/1.1" 404 Not Found
-INFO:     192.168.64.41:0 - "GET /api/conferences HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/conferences HTTP/1.1" 200 OK
-2026-08-21 18:17:59,471 | INFO | grmt.auth | login: user id=72655a23-170a-4fa2-ac62-6e1687fe922a
-INFO:     192.168.64.41:0 - "POST /api/auth/login HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     192.168.64.41:0 - "GET /api/auth/me HTTP/1.1" 200 OK

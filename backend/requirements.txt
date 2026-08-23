@@ -15,3 +15,11 @@ PyMuPDF==1.28.2
 psycopg2-binary==2.9.9
 pytest==8.3.3
 pytest-asyncio==0.24.0
+
+# AI-generated-text detection (Binoculars) — deliberately NOT pinning torch
+# here. Lightning Studio GPU images come with a CUDA-matched torch
+# preinstalled; a generic pip-pinned torch version risks breaking that
+# careful CUDA match. Confirm `torch.cuda.is_available()` returns True
+# BEFORE installing anything else — see PROJECT_HANDOFF.md §7.2c.
+transformers>=4.46.0
+accelerate>=1.0.0

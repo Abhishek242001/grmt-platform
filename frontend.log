@@ -5,14 +5,13 @@ nohup: ignoring input
 
 ▲ Next.js 16.3.1 (Turbopack)
 - Local:         http://localhost:3000
-- Network:       http://10.128.1.7:3000
+- Network:       http://10.128.0.67:3000
 - Environments: .env.local
-✓ Ready in 502ms
-✓ Running next.config.js took 30ms
+✓ Ready in 541ms
+✓ Running next.config.js took 31ms
 Attention: Next.js now collects completely anonymous telemetry regarding usage.
 This information is used to shape Next.js' roadmap and prioritize features.
 You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
 https://nextjs.org/telemetry
 
 
- GET /dashboard 200 in 3.4s (next.js: 3.1s, application-code: 256ms)

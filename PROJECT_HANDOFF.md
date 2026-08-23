@@ -17,9 +17,13 @@
 ## 2. Current Overall Status
 
 - **Phase 1 (Foundation, Auth, Backend, Frontend): COMPLETE.**
-- **Phase 2 (AI Models): 3 of 8 checks built and tested.** 5 remain.
+- **Phase 2 (AI Models): 4 of 7 checks built and wired into the live pipeline.** 3 remain (citation, plagiarism, logical_consistency). (Note: earlier revisions of this doc said "8 checks" — stale carryover from an early planning draft; `CHECK_TYPES` in `app/models/conferences.py` is the authoritative source and only ever defined 7.)
 
-Backend test suite: **131/131 passing** as of the last verified state (105 before update14 → +13 table/figure → +3 text-box extraction fix → +6 Word-to-PDF pipeline → +4 real signed-URL streaming, update19). Frontend also has a genuine working reviewer PDF viewer with annotations now — verified with a real headless-browser run against a real running instance, not just a build check (see §4.1).
+Backend test suite: **205/205 passing** as of the last verified state. Frontend has a genuine working reviewer PDF viewer with annotations (§4.1) AND a genuine working AI-generated-content detection card with highlighted flagged paragraphs (§4.3) — both verified with real headless-browser runs against a real running instance, not just build checks.
+
+**⚠️ The AI-generated-text detection check (§4.3) has a long, important saga — READ IT BEFORE TOUCHING THIS CHECK AGAIN.** Four different approaches were tried. Three failed with real, replicated negative results (not bugs — the actual detection signal wasn't there). The fourth (a pretrained academic-domain classifier, `followsci/bert-ai-text-detector`) is what's actually wired in now, and it is NOT highly accurate — it's a reasonable-effort starting point with known real weaknesses (misses adversarially-styled or closely-paraphrased AI text). §4.3 has the full decision record, every real number from every real test, and what a proper fix (fine-tuning on real academic-domain datasets) would need. Don't re-attempt Binoculars or Fast-DetectGPT at small model scale — that's already been tried twice and failed consistently.
+
+**Priority order note (from earlier in the project, still relevant): WebSocket wiring and the `/resubmit` file-upload fix are still paused**, deliberately, in favor of AI-check work. Not forgotten — see §9 for the historical ordering and what's still deferred.
 
 ---
 
@@ -55,7 +59,7 @@ Next.js 16.3.1, React 19.0.0, zero known vulnerabilities.
 
 ## 4. Phase 2 — AI Models: Detailed Status
 
-### 4.1 What's DONE (3 of 8 checks)
+### 4.1 What's DONE (4 of 7 checks — grammar, format, table_figure below; ai_text has its own §4.3 given its complexity)
 
 #### Grammar check (`backend/app/ai/grammar_check.py`) — DONE
 Uses self-hosted **LanguageTool** (Docker container, `erikvl87/languagetool`, port 8010).
@@ -77,7 +81,7 @@ Pure local computation — **no external service**, no GPU, no API calls. Checks
 - Structure presence: Abstract, References, Roman-numeral section headings
 
 #### Gate evaluation engine (`backend/app/core/gate_engine.py`) — DONE
-Deterministic rule evaluation — NOT an AI model itself. Reads completed `AIReport` rows, compares against the conference's configured `GateRule` thresholds, decides `ai_review_hard_failed` vs `in_human_review`. **Deliberately never returns `ai_review_passed`** — with only 3 of 8 checks built, claiming "passed" would falsely imply the full pipeline ran clean.
+Deterministic rule evaluation — NOT an AI model itself. Reads completed `AIReport` rows, compares against the conference's configured `GateRule` thresholds, decides `ai_review_hard_failed` vs `in_human_review`. **Deliberately never returns `ai_review_passed`** — with only 3 of 7 checks built, claiming "passed" would falsely imply the full pipeline ran clean.
 
 `CHECK_EVALUATORS` registry design: adding a new check's gate-evaluation logic is a ~6-line addition (a new evaluator function + one registry line), not a rewrite. Proven — this is exactly what happened when format-compliance was added.
 
@@ -130,14 +134,80 @@ Frontend (`react-pdf`, wraps pdf.js): page navigation, click-to-annotate (review
 - Log in as a *different* user (the paper's own researcher, not the annotation's reviewer-author) and confirm: the pin and comment are visible, the "click to annotate" affordance is correctly hidden (not a reviewer), and the Delete button is correctly hidden (not the annotation's author)
 - Confirmed the only console errors present were pre-existing and unrelated (`/images/logo.jpg` missing asset, `/decision` 404 for a submission with no decision yet — both predate this work)
 
-### 4.2 What's NOT built (5 of 8 checks remain)
+### 4.2 What's NOT built (3 of 7 checks remain)
 
 | Check | Model/Tool needed | Blocker |
 |---|---|---|
-| **Citation completeness** | GROBID | Needs GROBID Docker service stood up (not done), needs PDF input specifically |
+| **Citation completeness** | GROBID | Needs GROBID Docker service stood up (not done), needs PDF input specifically — no longer blocked on that (PDF pipeline exists), just not started |
 | **Plagiarism/similarity** | BGE-M3 + FAISS | Needs a reference corpus of papers to compare against — doesn't exist yet, real prerequisite, not a shortcut-able gap |
-| **AI-generated-text detection** | Binoculars + Fast-DetectGPT | Needs the GPU Studio; two ~7B models loaded — tight on the T4's 16GB VRAM budget, unverified whether both fit simultaneously |
-| **Logical consistency** | Qwen2.5-7B-Instruct via Ollama | Needs Ollama + model download on the GPU Studio; single model so more tractable than AI-text detection, but still new GPU infra |
+| **Logical consistency** | Qwen2.5-7B-Instruct via Ollama | Needs Ollama + model download on the GPU Studio; single model, moderate GPU setup, not started |
+
+### 4.3 AI-generated-text detection — DONE, but read the full saga before touching this again
+
+**Status: wired into the live pipeline and working, but with real, known accuracy limitations.** This took four full attempts across one long session. Three failed with genuine, replicated negative results — not bugs, not bad luck, real evidence the underlying approach doesn't work at the scale/setup available. Documented in full because the failures are exactly as informative as the eventual success, and re-attempting an already-rejected approach would waste real time.
+
+#### Attempt 1: Binoculars, Falcon-7B pair (the original plan) — rejected before writing any code
+
+Falcon-7B alone needs ~15GB in FP16; Binoculars needs **two** loaded simultaneously (~30GB combined) — roughly double the T4's 16GB budget. A published benchmark needed an L40S (48GB) just to run Binoculars and Fast-DetectGPT together, confirming this wasn't an overly cautious read of the constraint.
+
+#### Attempt 2: Binoculars, Qwen2.5-0.5B pair — built, tested on real T4, FAILED
+
+Swapped to a much smaller same-family base/instruct pair (`Qwen/Qwen2.5-0.5B` + `Qwen/Qwen2.5-0.5B-Instruct` — chosen over Phi-1.5 because Qwen has an *official* matched instruct release, unlike Phi-1.5's community-only instruct fine-tune). Real calibration on real T4:
+- Single pair: human sample scored `1.1111` (likely_human, correct), AI sample scored `1.2090` (likely_human, **wrong** — and *higher*, the wrong direction, not just wrong side of a threshold)
+- 4-per-class calibration set: human mean ≈1.154, AI mean ≈1.232 — **AI scored higher than human on average**, fully interleaved when sorted, no separation at all
+- Ruled out sample length as the cause (retested with ~230-word passages, same backward result)
+- **Root cause (found via real research, not guessed)**: zero-shot detection relies on the proxy model being well-aligned with whatever model generated the text. A 0.5B Qwen proxy has no reason to find Claude's (the AI actually writing the test samples) writing patterns statistically unusual — the observer/generator mismatch collapses the signal the method needs.
+
+#### Attempt 3: Fast-DetectGPT, single Qwen2.5-3B model — built, tested on real T4, FAILED
+
+Different method (conditional probability curvature, not perplexity-ratio), one larger model instead of two smaller ones (freed VRAM from not needing a pair). Same 8 calibration samples for direct comparison: human curvature mean ≈0.333, AI mean ≈0.007 — again **backward**, again fully interleaved (`-0.71(H), -0.30(AI), -0.07(H), -0.01(AI), 0.04(AI), 0.30(AI), 0.30(H), 1.81(H)`). Confirms the problem wasn't specific to Binoculars or to the 0.5B scale — it's proxy-model/generator mismatch and domain unfamiliarity, a documented, real limitation of zero-shot detection methods generally (current research explicitly frames this as an arms race: "detectors are increasingly precise, while LLMs keep improving alignment with human styles, rendering detectors potentially obsolete tomorrow").
+
+**Both pure-math scoring formulas (Binoculars' perplexity/cross-perplexity ratio, Fast-DetectGPT's curvature statistic) are independently verified correct** — 27 hand-calculated unit tests between them (`binoculars_scoring.py`, `fast_detect_gpt_scoring.py`) — so the negative results are real findings about the detection approach, not implementation bugs. These two modules and their model-inference counterparts (`ai_text_detection_check.py`, `fast_detect_gpt_check.py`) are still in the codebase, unused, kept for the historical record and in case future research changes the calculus (e.g. much larger GPU access).
+
+#### Attempt 4: RADAR (TrustSafeAI/RADAR-Vicuna-7B) — a trained classifier, not zero-shot — built, tested, real signal but real bias
+
+Different category of approach entirely: a *trained* adversarial classifier (despite the name, actually a RoBERTa-large model, ~355M params — "Vicuna-7B" refers to what it was trained against, not its own size). Real calibration: caught all 4 AI samples confidently (0.95-0.999), but flagged 3 of 4 human samples as AI too — specifically the **formal, structured** ones, not randomly. This is a real, serious, documented failure mode for our use case (academic writing is inherently formal), not just imprecision — deploying this would systematically false-accuse real researchers, especially non-native English speakers (a well-documented bias pattern for detectors trained on general web text, later independently confirmed while researching ZeroGPT — see below). Non-commercial license was also a real constraint (inherited from Vicuna-7B-v1.1).
+
+#### ZeroGPT — researched, explicitly rejected, never built
+
+User asked about this commercial tool directly. Real findings from independent sources (not vendor marketing): self-reported ~98% accuracy, independent benchmarks show 67-85%; false-positive rate 15-26%, with **independently confirmed higher false-positive rates specifically on "academic writing, formal business writing, and content from non-native English speakers"** — the same bias pattern RADAR showed, now confirmed by a second, independent source. Also: no published technical documentation, no independent academic benchmark participation (opaque "DeepAnalyse™" black box), sends full paper text to a third-party server (real confidentiality concern for peer review), and degrades on newer models. **Naming trap worth remembering**: GPTZero (different company) is a meaningfully stronger product if an external API is ever reconsidered — real academic benchmark validation (99.3% recall, Chicago Booth 2026), much lower reported false-positive rate (1-2%), real LMS integrations. Still carries the same "send private papers to a third party" and recurring-cost concerns any external API has. Not pursued either way — self-hosting was already working better.
+
+#### Attempt 5 (the one that's actually wired in): `followsci/bert-ai-text-detector`
+
+BERT-base, fine-tuned specifically on **1.86M academic paragraphs from arXiv** — MIT licensed (no RADAR-style restriction). Self-reported 99.57% accuracy treated with real skepticism (same as every other self-reported number this session) — the only number that mattered was our own calibration.
+
+**Real result on the same 8 samples**: 5/8 correct, but — critically — **no bias against formal academic writing** (RADAR's specific failure mode doesn't show up here; 3 of 4 human samples correctly identified, including formal/technical ones). The two AI misses were both adversarially-constructed on purpose (a deliberately casual-register AI sample, and a close paraphrase of a human sample) — a real, expected limitation (adversarial/mimicking text is a known hard case for any detector), not a random failure. The model is also **overconfident when wrong** (0.0000/1.0000, not hedged) — worth keeping in mind when interpreting results; a wrong answer stated with 100% confidence is more dangerous than one that hedges.
+
+**This is the model actually wired into the live pipeline now** (`app/ai/followsci_check.py`) — not because it's highly accurate, but because it was the only one of five approaches that avoided the specific bias that would actively harm real users, and its real-world weaknesses (adversarial/paraphrased text) are a more defensible, expected kind of failure than "flags formal writing as AI."
+
+#### The pipeline architecture (matches the organizer's actual policy model)
+
+Built after the project owner specified the real requirement: get text → chunk into buckets → score each bucket → **word-weighted percentage** (not a simple average) → compare against an **organizer-configured maximum** (e.g. "must be under 15%") → highlight flagged buckets.
+
+- **`text_chunking.py`** — splits text into word-count buckets (default 300 words, fits BERT's 512-token limit with headroom), preserving exact character offsets into the original text. 9 tests.
+- **`ai_content_pipeline.py`** — `aggregate_chunk_results()`: **word-weighted**, not a flat average — `percentage = (words in AI-flagged chunks) / (total words) × 100`. This was a real design correction: a flat average of probabilities treats every chunk as equally significant regardless of size, which doesn't correspond to "X% of the content" as a policy statement at all. **Accept requires strictly below the threshold** (exactly at the threshold fails — "must have less than 15%" was taken literally). The scorer is dependency-injected (defaults to `followsci_check`), so swapping to a future fine-tuned model is a one-line change, not a rewrite. 17 tests, including a hand-verified boundary case (exactly 15.0% → reject) and a direct comparison showing the identical document accepts at a looser 25% policy but rejects at a strict 15% one.
+- Verified end-to-end on real T4 with the real model on a document that's genuinely half real human text, half genuinely Claude-written: correctly computed **31.82% AI-generated (140/440 words)** and correctly pointed the highlighted flagged chunk at the actual AI-written half, not a random or scattered match.
+
+#### Wiring into the live pipeline
+
+- `gate_engine.py`: `_ai_text_passes` — comparison direction is **inverted** from every other evaluator (`percentage < threshold` passes, not `score >= threshold`) — documented heavily in-code since copying the wrong pattern would silently accept everything except 100%-AI-generated submissions.
+- **Real discovery while wiring this in**: `app/models/conferences.py` already has `NEVER_HARD_GATE = {"plagiarism", "ai_text"}`, a DB-enforced constraint (`ck_gate_rule_never_hard_gate`) from an earlier phase that a GateRule for this check_type can never be configured as a hard gate — only ever a soft flag for human review. Given everything found in attempts 1-4 about real false-positive risk, this is exactly the right call, already baked in before this session even started. A submission can never be auto-rejected purely on an AI-detection score.
+- `submissions.py`: added to `checks_to_run`, gracefully degrades to a normal `status: "error"` result (not a crash) if torch/transformers/GPU aren't available on whatever machine runs the background task.
+- Frontend: `AiTextDetectionReportCard` in `page.tsx` — shows the percentage (red if over the organizer's max), and each flagged chunk in its own highlighted paragraph block with its actual text, word count, and confidence — verified rendering correctly via a real Playwright screenshot against a real running instance.
+- **Explicitly NOT built**: true highlighting drawn directly on the rendered PDF (boxes at exact page coordinates) — that needs mapping flagged text back to PDF bounding boxes (PyMuPDF's `search_for()` could do this, but it's new, real work). What exists is a dedicated highlighted-paragraph list in the AI Feedback panel — achieves "see exactly what was flagged and read it," just not as a canvas overlay.
+
+#### Real path forward if `followsci`'s accuracy proves insufficient with more testing
+
+Fine-tuning is no longer blocked on data collection the way it originally seemed — two real, purpose-built academic-domain datasets were found: `AITextDetect/AI_Polish_clean` (built specifically for generalization research in academic writing) and a 469K-real-arXiv-paragraph dataset from a 2026 paper (paired with 100K GPT-3.5 + 100K Gemini-generated paragraphs). That same paper's own properly-trained model got **81% balanced accuracy** (100% on GPT-3.5, 93% on Gemini, 76% human recall) — a realistic target to calibrate expectations against, not the near-100% numbers self-reported models keep claiming and not delivering.
+
+**Future GPU scope, if ever revisited:**
+
+| Setup | What it gets you | GPU needed |
+|---|---|---|
+| **Current (followsci, CPU-cheap BERT-base)** | Working now, real known weaknesses | T4 16GB (what we have) |
+| **Fine-tune our own on real academic datasets above** | Best long-term fit, full control, no third-party dependency | T4 16GB is plenty for BERT/DeBERTa-base fine-tuning |
+| **Zero-shot with the original Falcon-7B pair** (if ever revisited despite attempts 1-2's failure at smaller scale) | The specific, most-validated Binoculars configuration | A100 40GB or L40S 48GB |
+| **Multi-method ensemble** (several approaches cross-validating) | Meaningfully more robust, closer to current research | A100 80GB |
 
 ---
 
@@ -179,6 +249,13 @@ Real templates often have multiple `sectPr` sections (e.g., a title-page-specifi
 - **Extracting an `update*.zip` from inside the target directory double-nests the path.** The zip's internal paths are relative to the repo root (e.g., `backend/app/...`), so always `cd ~/grmt-platform` (repo root) before extracting — never `cd` into `backend/` or `frontend/` first.
 - **LibreOffice (`soffice`) is not preinstalled on a fresh Lightning Studio** — confirmed directly (Aug 2026): a fresh instance's `pytest` run failed 5 tests with the wrong error signature until traced back to a missing binary, not a code bug. See §7.2b for the install command. Was deliberately caught by tests hitting the real binary rather than mocking it — same reasoning as §5.1: mocking `soffice` out would have hidden this deployment gap AND the permissive-garbage-input behavior documented in §4.1.
 
+### 5.7 Text-box content is invisible to `doc.paragraphs` entirely — and IEEE's own template guidance tells authors to use text boxes for figures
+Discovered via the table/figure consistency check's first real-document test: a real submitted `.docx` had genuine figure and table captions, but the check reported both as "referenced in the text but no matching caption was found." The captions were real — they just weren't in `doc.paragraphs` at all.
+
+Root cause: `paragraph.text` / `run.text` in python-docx only walk a run's **direct** `w:t` children. Content inside a text box lives nested inside a `w:txbxContent` element (wrapped in either a legacy `<v:pict><v:textbox>` or a modern DrawingML shape) — structurally *not* a direct-child paragraph of the document body, so it's invisible to the normal paragraph-iteration approach every check up to this point relied on. This isn't a rare authoring choice: IEEE's own official conference-template guidance explicitly tells authors to insert figures via a text box ("more stable than directly inserting a picture directly"), so this will recur on other real submissions, not just this one.
+
+Fixed in `backend/app/ai/docx_utils.py`'s new `extract_textbox_paragraphs()` — walks the document XML for every `w:txbxContent` element (covers both the legacy and modern wrapper with one tag-name search) and returns its paragraph text. `grammar_check.py`'s `extract_text_from_docx()` now appends this to the normal paragraph text, so **every check that reads document text** (grammar, table/figure, and format-compliance's structure checks) benefits, not just the check that happened to surface the gap. Text-box paragraphs are appended after body text rather than interleaved at their true position — reconstructing exact reading-order placement wasn't worth the complexity, since every consumer of this text does whole-document pattern matching, not position-dependent reading.
+
 ### 5.8 A schema field existing, and an endpoint returning a signed-URL-shaped string, doesn't mean the file is actually fetchable
 Discovered while building the reviewer PDF viewer — before writing any frontend code, tracing whether `GET /pdf-url`'s returned URL could actually be fetched. It couldn't: `generate_signed_url()` signed a raw filesystem path, and `verify_signed_url()` existed but was never called anywhere — no route consumed the signature or served file bytes back. The one existing test only asserted the returned string *contained* `"signature="` and `"expires="`, never that a client could do anything with it.
 
@@ -189,12 +266,10 @@ Found the moment the app was actually used live (not sandbox testing) — a subm
 
 Two independent failure points along one user-facing flow; only handling one of them isn't enough. Fixed with `<Document onLoadError={...}>`, routed to the same friendly "PDF not available" message the metadata-failure path already used. Verified against the exact real scenario (a version with no converted PDF, live in a browser via Playwright) — confirmed the friendly message now renders — and separately confirmed the working case (a version with a real PDF) still renders correctly, so the fix didn't regress the happy path.
 
-### 5.7 Text-box content is invisible to `doc.paragraphs` entirely — and IEEE's own template guidance tells authors to use text boxes for figures
-Discovered via the table/figure consistency check's first real-document test: a real submitted `.docx` had genuine figure and table captions, but the check reported both as "referenced in the text but no matching caption was found." The captions were real — they just weren't in `doc.paragraphs` at all.
+### 5.10 A file rendering correctly can still contain a real, visible defect that has nothing to do with the platform
+Spotted by the project owner in a live screenshot, not caught in sandbox testing: a test fixture (`IEEE-filled-realistic.docx`, hand-built weeks earlier to validate the table/figure check against realistic content) rendered with a doubled caption — **"Fig. 1. Fig. 1. Detection accuracy..."** — in the PDF viewer. Traced directly rather than assumed: the document's `"figure caption"` paragraph *style itself* (in `styles.xml`) carries a built-in Word auto-numbering definition (`<w:numPr><w:numId w:val="2"/></w:numPr>`), which LibreOffice correctly resolves and renders as a visual "Fig. 1." prefix. The test fixture's construction script (run months earlier, not part of the shipped codebase) *also* typed a literal "Fig. 1." into that same paragraph's text — so the rendered PDF shows both the style's auto-generated prefix and the hand-typed one, stacked.
 
-Root cause: `paragraph.text` / `run.text` in python-docx only walk a run's **direct** `w:t` children. Content inside a text box lives nested inside a `w:txbxContent` element (wrapped in either a legacy `<v:pict><v:textbox>` or a modern DrawingML shape) — structurally *not* a direct-child paragraph of the document body, so it's invisible to the normal paragraph-iteration approach every check up to this point relied on. This isn't a rare authoring choice: IEEE's own official conference-template guidance explicitly tells authors to insert figures via a text box ("more stable than directly inserting a picture directly"), so this will recur on other real submissions, not just this one.
-
-Fixed in `backend/app/ai/docx_utils.py`'s new `extract_textbox_paragraphs()` — walks the document XML for every `w:txbxContent` element (covers both the legacy and modern wrapper with one tag-name search) and returns its paragraph text. `grammar_check.py`'s `extract_text_from_docx()` now appends this to the normal paragraph text, so **every check that reads document text** (grammar, table/figure, and format-compliance's structure checks) benefits, not just the check that happened to surface the gap. Text-box paragraphs are appended after body text rather than interleaved at their true position — reconstructing exact reading-order placement wasn't worth the complexity, since every consumer of this text does whole-document pattern matching, not position-dependent reading.
+Confirmed as cosmetic and fixture-specific, not a platform bug: `python-docx`'s `paragraph.text` never resolves style-level numbering fields at all (only literal run text), which is exactly why the table/figure check still correctly scored this file 100% (6/6) — it only ever saw one "Fig. 1.", matching what was intended. No code change was needed; this is purely a artifact of one specific test file, not the conversion pipeline, the AI checks, or the viewer. Recorded here mainly as a reminder that "it renders" and "it's correct" are different claims, and a live screenshot review can catch things sandbox testing won't — worth continuing to share screenshots/live results, not just pytest/build output.
 
 ---
 
@@ -239,6 +314,30 @@ which soffice && soffice --version
 ```
 `libreoffice-writer` alone is enough — it pulls in `libreoffice-core` (which actually provides the `soffice` binary) as a dependency, without the full `libreoffice` metapackage's much larger footprint (Calc, Impress, etc., none of which this pipeline needs).
 
+### 7.2c GPU verification + AI-text-detection dependencies
+Confirm the Studio actually has a GPU and CUDA-enabled PyTorch before installing anything else — catches a misconfigured Studio immediately instead of failing confusingly mid-way through a model load:
+```bash
+nvidia-smi
+python3 -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
+```
+`nvidia-smi` should show a T4 with ~16GB. If `torch.cuda.is_available()` is `False` on a Studio that does have a GPU, PyTorch was likely installed without CUDA support — reinstall per [pytorch.org](https://pytorch.org)'s current command for the Studio's CUDA version rather than guessing a version number here (it changes over time).
+
+`transformers` and `accelerate` are in `requirements.txt` now (added when this check was built) — `pip install -r requirements.txt` in §7.2 already covers them, no separate install step needed.
+
+**The model actually used in production is `followsci/bert-ai-text-detector`** (see §4.3 for the full decision record — four other approaches were tried and rejected first). Pre-download it so the first real check run isn't the first time the download happens:
+```bash
+python3 -c "
+from transformers import BertTokenizer, BertForSequenceClassification
+name = 'followsci/bert-ai-text-detector'
+print(f'Downloading {name}...')
+BertTokenizer.from_pretrained(name)
+BertForSequenceClassification.from_pretrained(name)
+print('done')
+"
+```
+
+**Other models downloaded during development (not used in production, but likely still cached on this Studio from testing — harmless to leave, or safe to delete from `~/.cache/huggingface` to reclaim space if needed):** `Qwen/Qwen2.5-0.5B`, `Qwen/Qwen2.5-0.5B-Instruct` (Binoculars attempt, rejected), `Qwen/Qwen2.5-3B` (Fast-DetectGPT attempt, rejected), `TrustSafeAI/RADAR-Vicuna-7B` (RADAR attempt, rejected for bias against formal writing), `microsoft/phi-1_5` (earliest model choice, superseded before a check was ever built against it).
+
 ### 7.3 LanguageTool (grammar check dependency)
 ```bash
 docker start languagetool 2>/dev/null || docker run -d -p 8010:8010 --name languagetool erikvl87/languagetool
@@ -275,7 +374,7 @@ URL is `https://3000-<that-suffix>.cloudspaces.litng.ai`
 cd ~/grmt-platform/backend
 python3 -m pytest -v 2>&1 | tail -20
 ```
-Should show whatever passed count matches your last pushed commit on `dev` — apply any not-yet-pushed `updateN.zip` packages you've received on top (check with `git log --oneline -5` and compare against what's been discussed), then re-run to confirm **127 passed**.
+Should show whatever passed count matches your last pushed commit on `dev` — apply any not-yet-pushed `updateN.zip` packages you've received on top (check with `git log --oneline -5` and compare against what's been discussed), then re-run to confirm **205 passed** (as of `update31` — the ai_text pipeline wiring).
 
 ---
 
@@ -309,19 +408,20 @@ This is the pattern used throughout Phase 2 — worth continuing, since it verif
 
 ---
 
-## 9. Suggested Next Steps (pick up from here)
+## 9. Suggested Next Steps (original ordering — superseded, kept for history; see §2 and §4.3 for the actual current plan)
 
-In rough order of "easiest to build next" given current infrastructure:
+This was the original "easiest to build next" ordering. **It's no longer being followed as-is** — after the PDF viewer shipped, the project owner explicitly chose to pause WebSocket wiring and the resubmit fix in favor of resuming AI-check work. Kept here for historical context, not as the active plan.
 
 1. ~~**Table/figure consistency check**~~ — **DONE**, see §4.1.
 2. ~~**Word-to-PDF conversion pipeline**~~ — **DONE**, see §4.1.
-3. ~~**Reviewer PDF viewer & annotations**~~ — **DONE**, see §4.1. Also fixed a real, previously-untested backend gap along the way (the signed-URL scheme never actually served bytes).
-4. **Wire WebSocket live-push into the AI-report UI** — replaces polling with the already-built, already-tested real-time channel. Frontend-only work.
-5. **Fix `/resubmit` to accept real file uploads** — closes the gap flagged in §6, makes resubmission actually re-trigger AI checks.
-6. **GROBID setup + citation-completeness check** — bigger lift (new Docker service, TEI-XML parsing). Unblocked — the Word→PDF pipeline it depended on is done.
-7. **Reference corpus + plagiarism check** — real prerequisite work before this check can even start.
-8. **Ollama + Qwen2.5-7B + logical-consistency check** — first LLM-based check, moderate GPU setup.
-9. **Binoculars + Fast-DetectGPT + AI-text detection** — biggest GPU risk (two large models, tight VRAM budget), do last or verify VRAM feasibility early.
+3. ~~**Reviewer PDF viewer & annotations**~~ — **DONE**, see §4.1. Also fixed a real, previously-untested backend gap along the way (the signed-URL scheme never actually served bytes) and a real frontend error-handling gap found live (§5.9).
+4. **Wire WebSocket live-push into the AI-report UI** — **PAUSED**, not abandoned. Replaces polling with the already-built, already-tested real-time channel. Frontend-only work. Pick this up after the AI checks below.
+5. **Fix `/resubmit` to accept real file uploads** — **PAUSED**, not abandoned. Closes the gap flagged in §6, makes resubmission actually re-trigger AI checks.
+6. **AI-generated-text detection (Binoculars, Phi-1.5 pair)** — **← ACTUAL CURRENT TASK.** See §4.3 for the full decision record (why Falcon-7B was rejected, why Phi-1.5, what was set aside, future-scope GPU tiers). If resuming in a new chat, start here.
+7. **GROBID setup + citation-completeness check** — bigger lift (new Docker service, TEI-XML parsing). Unblocked — the Word→PDF pipeline it depended on is done. Good next AI check after AI-text-detection — no GPU risk, similar shape to table/figure check.
+8. **Ollama + Qwen2.5-7B + logical-consistency check** — first genuinely LLM-based check (fuzzy judgment, not deterministic extraction) — will need real thought given to what "logically consistent" means as a testable claim before writing code.
+9. **Reference corpus + plagiarism check** — real prerequisite work (the corpus itself) before this check can even start; not purely a coding task.
+10. **Then:** WebSocket wiring and the resubmit fix, resuming the paused items above.
 
 ---
 
@@ -333,14 +433,27 @@ backend/app/ai/
 ├── pdf_text_extraction.py     # Column-aware PDF text extraction, dehyphenation, page_map tracking
 ├── format_compliance_check.py # IEEE margin/font/structure checks, page-size-aware
 ├── table_figure_check.py      # Caption<->reference consistency, numbering gaps/duplicates (.docx + .pdf)
-└── docx_utils.py              # Shared open_docx() + extract_textbox_paragraphs() (text-box content)
+├── docx_utils.py              # Shared open_docx() + extract_textbox_paragraphs() (text-box content)
+│
+│   AI-text-detection — see §4.3 for the full saga. Only followsci_check.py
+│   + text_chunking.py + ai_content_pipeline.py are actually wired into the
+│   live pipeline. The rest are kept for the historical record / in case
+│   future GPU access changes the calculus — NOT used in production.
+├── binoculars_scoring.py      # Pure perplexity/cross-perplexity math — REJECTED approach, unused, 13 hand-verified tests
+├── ai_text_detection_check.py # Binoculars model inference (Qwen2.5-0.5B pair) — REJECTED approach, unused
+├── fast_detect_gpt_scoring.py # Pure curvature-statistic math — REJECTED approach, unused, 14 hand-verified tests
+├── fast_detect_gpt_check.py   # Fast-DetectGPT model inference (Qwen2.5-3B) — REJECTED approach, unused
+├── radar_check.py             # RADAR classifier (TrustSafeAI/RADAR-Vicuna-7B) — REJECTED (bias vs. formal writing), unused
+├── followsci_check.py         # ★ ACTUALLY USED — followsci/bert-ai-text-detector, academic-domain BERT classifier
+├── text_chunking.py           # ★ ACTUALLY USED — word-count bucketing with original-text character offsets
+└── ai_content_pipeline.py     # ★ ACTUALLY USED — chunk->score->word-weighted-percentage->threshold->highlight orchestration
 
 backend/app/core/
-├── gate_engine.py             # CHECK_EVALUATORS registry (grammar, format, table_figure), evaluate_submission_gates()
+├── gate_engine.py             # CHECK_EVALUATORS registry (grammar, format, table_figure, ai_text — INVERTED comparison for ai_text), evaluate_submission_gates()
 └── word_to_pdf.py             # LibreOffice headless Word->PDF conversion, per-call profile isolation
 
 backend/app/routers/
-├── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload endpoint
+├── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload endpoint (now runs 4 checks per upload)
 └── files.py                   # pdf-url (issues signed URL) + pdf-stream (actually serves bytes, signature-only auth) + annotation CRUD
 
 backend/tests/
@@ -349,12 +462,21 @@ backend/tests/
 ├── test_format_compliance_check.py
 ├── test_table_figure_check.py
 ├── test_docx_utils.py
-├── test_gate_engine.py
+├── test_gate_engine.py        # includes ai_text's inverted-comparison + NEVER_HARD_GATE constraint tests
 ├── test_word_to_pdf.py        # real soffice conversion, no mocking
 ├── test_files.py              # real signed-URL streaming: fetchable, tamper-rejected, expiry-rejected, real annotation CRUD
-└── test_submissions.py        # includes integration tests for all checks + PDF conversion running together
+├── test_binoculars_scoring.py # pure math tests for the rejected Binoculars approach
+├── test_fast_detect_gpt_scoring.py # pure math tests for the rejected Fast-DetectGPT approach
+├── test_radar_check.py        # mocked orchestration tests for the rejected RADAR approach
+├── test_followsci_check.py    # mocked orchestration tests for the check actually in use
+├── test_text_chunking.py      # word-count bucketing, hand-verified
+├── test_ai_content_pipeline.py # word-weighted aggregation, hand-verified boundary cases, mocked end-to-end orchestration
+└── test_submissions.py        # includes integration tests for all 4 live checks + PDF conversion running together
 
-frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard + PdfAnnotationViewer wiring
+frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard + AiTextDetectionReportCard + PdfAnnotationViewer wiring
 frontend/components/PdfAnnotationViewer.tsx  # react-pdf-based viewer, click-to-annotate (reviewer-gated), percentage-positioned pins
-frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult, Annotation/SignedUrl types + CRUD functions
+frontend/lib/api.ts                     # GrammarCheckResult, FormatCheckResult, TableFigureCheckResult, AiTextDetectionResult/FlaggedAiChunk, Annotation/SignedUrl types + CRUD functions
 ```
+
+**Explicitly NOT built for ai_text**: true highlighting drawn on top of the rendered PDF (boxes at exact page coordinates) — needs new work mapping flagged text to PDF bounding boxes (PyMuPDF's `search_for()` could do this). What exists is a highlighted-paragraph list in the AI Feedback panel instead — see §4.3's wiring section for the full explanation of this scope decision.
+

@@ -319,6 +319,28 @@ export interface TableFigureCheckResult {
   issues: string[];
 }
 
+export interface FlaggedAiChunk {
+  text: string;
+  start_char: number;
+  end_char: number;
+  word_count: number;
+  ai_probability: number;
+}
+
+export interface AiTextDetectionResult {
+  status: string;
+  error?: string;
+  ai_generated_percentage?: number;
+  ai_word_count?: number;
+  total_word_count?: number;
+  overall_verdict?: 'accept' | 'reject';
+  total_chunk_count?: number;
+  flagged_chunk_count?: number;
+  flagged_chunks?: FlaggedAiChunk[];
+  chunk_probability_threshold?: number;
+  max_ai_percentage?: number;
+}
+
 export function getAiReports(submissionId: string): Promise<AIReport[]> {
   return request<AIReport[]>(`/submissions/${submissionId}/ai-report`);
 }

@@ -48,11 +48,49 @@ def _table_figure_passes(result: dict, threshold: float | None) -> bool:
     return score >= threshold
 
 
+def _ai_text_passes(result: dict, threshold: float | None) -> bool:
+    # INVERTED comparison direction from every other evaluator above —
+    # ai_content_pipeline.py's own module docstring flags this explicitly.
+    # Grammar/format/table_figure all pass when score >= threshold (higher
+    # is better — more checks passed, higher quality). This one passes
+    # when the AI-generated percentage is BELOW the organizer's configured
+    # maximum (lower is better — less AI-generated content). Copying the
+    # >= pattern from the evaluators above would silently accept every
+    # submission except one that's 100% AI-generated.
+    #
+    # Deliberately recomputes pass/fail from the raw ai_generated_percentage
+    # against THIS call's threshold, rather than trusting result's own
+    # "overall_verdict" field — that field was computed using whatever
+    # default threshold was in effect when the check itself ran, which can
+    # predate or differ from the organizer's actual GateRule.threshold
+    # (e.g. if the organizer changes the gate rule after the check already
+    # ran). This function is the single source of truth for the real gate
+    # decision; the check's own "overall_verdict" is informational only.
+    #
+    # NOTE: this evaluator's return value can never actually trigger a hard
+    # fail in practice — models/conferences.py's NEVER_HARD_GATE = {
+    # "plagiarism", "ai_text"} is a DB-enforced constraint (ck_gate_rule_
+    # never_hard_gate) that a GateRule for this check_type can never have
+    # is_hard_gate=True in the first place. A deliberate safety decision
+    # given the real false-positive risk found calibrating this check (see
+    # PROJECT_HANDOFF.md's decision record) — a submission must never be
+    # auto-rejected purely on an AI-detection score with no human review.
+    # The evaluator still computes a real pass/fail (surfaced to reviewers
+    # as a flag), it just can never escalate to an automatic hard failure.
+    if threshold is None:
+        return True
+    percentage = result.get("ai_generated_percentage")
+    if percentage is None:
+        return True  # the check itself errored; don't gate on a failed check
+    return percentage < threshold
+
+
 CHECK_EVALUATORS = {
     "grammar": _grammar_passes,
     "format": _format_passes,
     "table_figure": _table_figure_passes,
-    # citation, plagiarism, ai_text, logical_consistency
+    "ai_text": _ai_text_passes,
+    # citation, plagiarism, logical_consistency
     # register here as each check is built — this is the one place that needs
     # a new line added, not a rewrite of the evaluation logic itself.
 }

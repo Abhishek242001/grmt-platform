@@ -119,10 +119,11 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
     this code — see planning log §26 for why a direct import wouldn't work.
 
     Runs every check that's currently implemented (grammar, format,
-    table_figure) — new checks get added to this loop, not a new copy of
-    this whole function."""
+    table_figure, ai_text) — new checks get added to this loop, not a new
+    copy of this whole function."""
     import asyncio
 
+    from app.ai.ai_content_pipeline import run_ai_text_detection_check
     from app.ai.format_compliance_check import run_format_compliance_check
     from app.ai.grammar_check import run_grammar_check
     from app.ai.table_figure_check import run_table_figure_check
@@ -143,6 +144,14 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
             ("grammar", lambda: run_grammar_check(file_path)),
             ("format", lambda: run_format_compliance_check(file_path, publisher_format=publisher_format)),
             ("table_figure", lambda: run_table_figure_check(file_path)),
+            # Real GPU inference (followsci BERT model) — meaningfully
+            # slower than the three checks above and needs torch/
+            # transformers installed on whatever machine runs this
+            # background task. Already gracefully degrades to a normal
+            # {"status": "error", ...} result (not a crash) if torch/
+            # transformers aren't installed or no GPU is available — see
+            # ai_content_pipeline.run_pipeline's try/except around scoring.
+            ("ai_text", lambda: run_ai_text_detection_check(file_path)),
         ]
 
         for check_type, run_fn in checks_to_run:

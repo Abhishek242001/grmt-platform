@@ -160,6 +160,70 @@ function TableFigureReportCard({ report }: { report: api.AIReport }) {
   );
 }
 
+function AiTextDetectionReportCard({ report }: { report: api.AIReport }) {
+  let result: api.AiTextDetectionResult | null = null;
+  try {
+    result = report.result_json ? JSON.parse(report.result_json) : null;
+  } catch {
+    result = null;
+  }
+
+  if (!result || result.status !== 'complete') {
+    // Deliberately gentle wording, not "failed" in red like a hard error —
+    // this check needs torch/transformers/GPU on whatever machine runs
+    // the background task, and a missing-GPU environment is an expected,
+    // graceful outcome (see backend/app/ai/ai_content_pipeline.py), not
+    // something to alarm a reviewer about.
+    return (
+      <div className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm text-[var(--color-ink)]/50">
+        AI content detection unavailable: {result?.error ?? 'unknown error'}
+      </div>
+    );
+  }
+
+  const pct = result.ai_generated_percentage ?? 0;
+  const maxPct = result.max_ai_percentage;
+  const isReject = result.overall_verdict === 'reject';
+
+  return (
+    <div className="mt-3 border-t border-[var(--color-line)] pt-4">
+      <div className="flex items-center gap-4">
+        <span className="font-bold">AI-Generated Content</span>
+        <span
+          className={`font-display-bold text-2xl ${isReject ? 'text-red-600' : 'text-[var(--color-accent)]'}`}
+        >
+          {pct.toFixed(1)}%
+        </span>
+        {maxPct !== undefined && (
+          <span className="text-xs text-[var(--color-ink)]/50">
+            organizer max: {maxPct}% — {result.ai_word_count}/{result.total_word_count} words flagged
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-[var(--color-ink)]/40">
+        Score is informational for reviewers, not an automatic reject — a person always makes the final call.
+      </p>
+
+      {result.flagged_chunks && result.flagged_chunks.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {result.flagged_chunks.map((chunk, i) => (
+            <div
+              key={i}
+              className="border-l-4 border-yellow-400 bg-yellow-50 p-3 text-sm text-[var(--color-ink)]/80"
+            >
+              <div className="mb-1 flex items-center justify-between text-xs text-[var(--color-ink)]/50">
+                <span>{chunk.word_count} words</span>
+                <span>{(chunk.ai_probability * 100).toFixed(1)}% AI probability</span>
+              </div>
+              <p className="whitespace-pre-wrap">{chunk.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading } = useAuth();
@@ -310,6 +374,9 @@ export default function SubmissionDetailPage() {
                 }
                 if (report.check_type === 'table_figure') {
                   return <TableFigureReportCard key={report.id} report={report} />;
+                }
+                if (report.check_type === 'ai_text') {
+                  return <AiTextDetectionReportCard key={report.id} report={report} />;
                 }
                 return (
                   <div key={report.id} className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm">

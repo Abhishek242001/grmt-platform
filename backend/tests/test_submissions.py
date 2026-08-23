@@ -309,14 +309,20 @@ def test_upload_runs_grammar_check_and_stores_ai_report(client, monkeypatch):
     r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
     assert r.status_code == 200
     reports = r.json()
-    # Three reports now — grammar, format compliance, AND table/figure
-    # consistency all run per upload.
-    assert len(reports) == 3
+    # Four reports now — grammar, format compliance, table/figure
+    # consistency, AND ai_text (AI-generated-content detection) all run
+    # per upload.
+    assert len(reports) == 4
     report_by_type = {r["check_type"]: r for r in reports}
-    assert set(report_by_type.keys()) == {"grammar", "format", "table_figure"}
+    assert set(report_by_type.keys()) == {"grammar", "format", "table_figure", "ai_text"}
     assert report_by_type["grammar"]["status"] == "complete"
     assert report_by_type["format"]["status"] == "complete"
     assert report_by_type["table_figure"]["status"] == "complete"
+    # ai_text needs torch/transformers + ideally a GPU — gracefully
+    # degrades to status "error" (not a crash) in an environment without
+    # them, and "complete" where they're available. Both are valid,
+    # environment-dependent outcomes; what matters is the report exists.
+    assert report_by_type["ai_text"]["status"] in ("complete", "error")
 
     result = json.loads(report_by_type["grammar"]["result_json"])
     assert result["error_count"] == 1
@@ -413,7 +419,7 @@ def test_pdf_upload_also_runs_grammar_check(client, monkeypatch):
 
     r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
     reports = r.json()
-    assert len(reports) == 3
+    assert len(reports) == 4
     report_by_type = {r["check_type"]: r for r in reports}
     result = json.loads(report_by_type["grammar"]["result_json"])
     assert result["status"] == "complete"  # extraction + LanguageTool call both succeeded
