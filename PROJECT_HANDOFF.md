@@ -221,7 +221,7 @@ Built and fully unit-tested (18 tests: 10 pure XML-parsing, 8 mocked orchestrati
 - **Genuinely unverified beyond mocked tests**: GROBID itself was never actually run (no Docker/GROBID access in the environment this was built in) — see §7.3b for setup and what still needs a real run to confirm.
 - Real robustness fix made while wiring this in: broadened the exception handling around the GROBID HTTP call to catch any unexpected failure shape (not just the two specific `httpx` exception subclasses), not just for its own sake — this also fixed 7 pre-existing tests that broke because their shared `fake_post` mock (used across several unrelated upload-integration tests) didn't expect the `files=` keyword argument GROBID's multipart upload uses, since `httpx.post` is a shared module-level function and monkeypatching it affects every caller, not just the one test intended to target.
 
-### 4.5 Logical consistency — DONE, but genuinely unverified, and deliberately scoped narrow
+### 4.5 Logical consistency — DONE and verified end-to-end (update35)
 
 The first check that's a real LLM **judgment call** (Ollama + Qwen2.5-7B-Instruct reasoning about text), not deterministic extraction — same category of real risk as ai_text's whole saga (§4.3), approached the same way: build it carefully, test everything that can be tested without the real model, and be explicit about what still needs a real run.
 
@@ -230,7 +230,11 @@ The first check that's a real LLM **judgment call** (Ollama + Qwen2.5-7B-Instruc
 - **`backend/app/ai/logical_consistency_scoring.py`** — pure logic, 20 tests: `extract_abstract_and_conclusion()` (regex-based section extraction, hand-verified against several real edge cases — missing sections, no trailing section after CONCLUSION, plural "CONCLUSIONS" heading) and `parse_llm_response()` (defensive JSON validation — strips markdown fences models sometimes wrap responses in despite instructions not to, validates required fields, and catches a real self-contradiction case: the model claiming `"consistent": true` while still listing findings, or `false` with an empty findings list).
 - **`backend/app/ai/logical_consistency_check.py`** — the Ollama HTTP client. Uses Ollama's real **JSON-schema-constrained** structured output (the `format` parameter as a full JSON Schema object, a genuine grammar-level constraint during generation — not just `"format": "json"` or a hopeful prompt instruction), `temperature: 0` for determinism. 8 tests confirm the orchestration (including one that specifically checks only the abstract/conclusion text reaches the model, not the whole document).
 - **Added to `NEVER_HARD_GATE`** alongside `ai_text`/`plagiarism` (see `app/models/conferences.py`) — an unverified LLM judgment must not be able to auto-reject a submission any more than ai_text's real, confirmed bias risk (§4.3) was allowed to. Confirmed the existing Pydantic-level enforcement (`GateRuleIn.validate_never_hard_gate`) picks up the new set member automatically — no separate code change needed there.
-- **Genuinely unverified beyond mocked tests**: Ollama + Qwen2.5-7B-Instruct was never actually run (no Ollama access in the environment this was built in). §7.3c has setup steps AND a manual verification script — a deliberately obvious 95%-vs-80% accuracy inconsistency — run that first before trusting this check on anything real; if it reports `"consistent": true` on that obvious case, something is wrong with the prompt or the model isn't being reached correctly.
+- **Verified end-to-end for real (Sept 2026, update35)**: Ollama + `qwen2.5:7b-instruct` (Q4_K_M, 4.68GB, pulled and served locally on a Lightning T4 Studio — confirmed running via `/api/tags`) was actually run against `run_logical_consistency_check()`, not mocked. Two real runs, not one:
+  1. **Positive case** (§7.3c's deliberately obvious 95%-vs-80% abstract/conclusion mismatch): returned `consistent: False, score: 0.0`, with a correct finding pairing the two conflicting sentences and a coherent explanation of the discrepancy.
+  2. **Negative control** (abstract and conclusion both stating 91% accuracy, explicitly consistent): returned `consistent: True, score: 100.0, findings: []` — added specifically to rule out a check that just rubber-stamps "inconsistent" regardless of input. Confirms the check genuinely discriminates, not just that it runs without erroring.
+  
+  Both runs used the real JSON-schema-constrained structured output at `temperature: 0`, matching the orchestration §4.5 already describes. T4's 15.3GB VRAM comfortably covers the ~5.5GB Qwen2.5-7B-Instruct needs at Q4_K_M — no OOM risk observed or expected in normal operation.
 
 **A correction made while building this, worth remembering**: initially believed `NEVER_HARD_GATE`'s API-layer enforcement was missing (a comment claimed it existed but the router body didn't have it) and added a redundant check — turned out the enforcement already existed via a Pydantic `field_validator` on `GateRuleIn` in `schemas/conferences.py`, which the added router-level check could never actually reach (Pydantic validation happens before the endpoint body runs). Removed the dead code and corrected the comment rather than leave two enforcement paths, one of them unreachable — worth the reminder that "I can't find X" should mean "keep looking" before it means "X is missing."
 
@@ -311,7 +315,7 @@ While wiring logical_consistency into the gate system, found a comment in `model
 - **`.docx` column count isn't measured** — returns `None`, documented limitation, would need raw `<w:cols>` XML digging (not yet attempted).
 - **`.docx` page count isn't knowable without rendering** — same reason page-limit check is PDF-only.
 - **Reviewer-facing frontend pages were built early and haven't been re-verified** with the same real-build/real-test rigor later work received.
-- **GROBID and Ollama (citation completeness, logical consistency) were never actually run** — both checks are fully built and unit-tested with mocked external calls, but genuinely unverified end-to-end. See §7.3b/§7.3c for setup and the manual verification steps to run before trusting either on real submissions.
+- **GROBID (citation completeness) was never actually run** — fully built and unit-tested with mocked external calls, but genuinely unverified end-to-end. See §7.3b for setup and the manual verification steps to run before trusting this on real submissions. (Ollama/logical-consistency was verified for real in update35 — see §4.5.)
 - **Plagiarism/similarity check** — the one remaining unbuild check (§4.2). Blocked on a real prerequisite (no reference corpus of papers exists yet), not a coding gap — needs that decided/provided before this can start meaningfully.
 
 ---
@@ -497,13 +501,12 @@ Everything from the original roadmap (§9's old ordering, kept below for archaeo
 5. ~~`/resubmit` real file uploads~~ — **DONE**
 6. ~~AI-generated-text detection~~ — **DONE**, see §4.3's full saga (four attempts, three failures, the one that shipped)
 7. ~~Citation completeness~~ — **DONE**, see §4.4 — built and tested, but GROBID itself was never actually run (§7.3b)
-8. ~~Logical consistency~~ — **DONE**, see §4.5 — built and tested, but Ollama+Qwen2.5-7B was never actually run (§7.3c)
+8. ~~Logical consistency~~ — **DONE AND VERIFIED END-TO-END (update35)**, see §4.5 — real Ollama + qwen2.5:7b-instruct run, positive case + negative control both correct
 
-**The only thing left: plagiarism/similarity detection (BGE-M3 + FAISS).** Genuinely blocked, not just unstarted — it needs a reference corpus of papers to compare submissions against, and that corpus doesn't exist. This isn't a "go build it" task the way every other check was; it's a "go decide what the corpus should be and get it" task first. Worth raising directly with whoever owns this project rather than guessing at a source.
+**The only thing left to build: plagiarism/similarity detection (BGE-M3 + FAISS).** Genuinely blocked, not just unstarted — it needs a reference corpus of papers to compare submissions against, and that corpus doesn't exist. This isn't a "go build it" task the way every other check was; it's a "go decide what the corpus should be and get it" task first. Worth raising directly with whoever owns this project rather than guessing at a source.
 
-**Two real verification tasks, not code**, before fully trusting what's already shipped:
-- Run GROBID for real (§7.3b) and confirm citation completeness catches a genuine broken citation on a real paper
-- Run Ollama + Qwen2.5-7B for real (§7.3c) — start with the manual verification script (a deliberately obvious 95%-vs-80% inconsistency) before trusting it on anything real
+**One real verification task left, not code**:
+- Run GROBID for real (§7.3b) and confirm citation completeness catches a genuine broken citation on a real paper — Ollama/logical-consistency's equivalent task is now done (update35).
 
 Beyond that, this project has no other open threads. Everything else — Phase 1, the PDF pipeline, WebSocket, resubmit, and 6 of 7 AI checks — is built, tested, and (as far as `git log` on `dev` reflects what's actually been pushed) deployed.
 
