@@ -55,12 +55,30 @@ _RESPONSE_SCHEMA = {
 
 _PROMPT_TEMPLATE = """You are reviewing an academic paper for internal consistency. Compare the paper's ABSTRACT against its CONCLUSION.
 
-Look specifically for:
-- A claim, number, or result stated in the abstract that the conclusion states differently (e.g. a different accuracy figure, a different dataset size, a different claimed contribution)
+A genuine inconsistency is a CONTRADICTION — the two sections cannot both be true, or the
+conclusion undermines a specific claim the abstract made about this paper's own results or
+contribution. Look specifically for:
+- A number or result stated in the abstract that the conclusion states differently (e.g. a different accuracy figure, a different dataset size)
 - A claim the abstract states unconditionally that the conclusion hedges, qualifies, or contradicts
-- A contribution or finding claimed in the abstract that the conclusion does not support or mention at all
+- A contribution or finding claimed in the abstract that the conclusion explicitly disputes, reverses, or fails to support
 
-Do NOT flag: minor wording differences that don't change the actual claim, or additional detail in the conclusion that doesn't contradict the abstract (elaboration is fine, contradiction is not).
+Do NOT flag any of the following — they are not inconsistencies, even though they may look
+different at a glance. Two real examples of what NOT to flag:
+- Reordering or paraphrasing the same claim. Example: abstract says "a focus on Deep Learning
+  (DL) and Machine Learning (ML) techniques"; conclusion says "we first review state-of-the-art
+  ML and DL techniques." Same two things, different order — NOT an inconsistency.
+- A background/contextual fact the abstract mentions (a general statistic about the field, not
+  about this paper's own results) that the conclusion simply doesn't repeat. Example: abstract
+  states "the number of IoT devices... is estimated to reach 20 billion by the end of 2025"; the
+  conclusion doesn't restate this figure. Omitting a repeated detail is not a contradiction — the
+  conclusion doesn't have to restate every fact the abstract mentioned.
+- The conclusion adding detail, elaboration, or broader scope beyond what the abstract said, as
+  long as nothing in it actually contradicts the abstract.
+- A more general or less specific restatement of the same claim.
+
+Before finalizing your answer, check every candidate finding against the four points above. If a
+finding matches any of them, do not include it in your response — only report findings that are
+genuine contradictions a human reviewer would actually flag.
 
 ABSTRACT:
 {abstract}

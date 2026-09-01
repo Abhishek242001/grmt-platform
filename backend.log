@@ -306,3 +306,195 @@ INFO:     Finished server process [49709]
 INFO:     Started server process [77668]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+2026-09-01 21:15:55,733 | INFO | grmt.auth | login: user id=72655a23-170a-4fa2-ac62-6e1687fe922a
+INFO:     192.168.64.60:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "POST /api/submissions HTTP/1.1" 201 Created
+INFO:     192.168.64.60:0 - "POST /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/upload HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "POST /api/ws/ticket HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "POST /api/ws/ticket HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/45a92057-c9b7-416b-9401-a39319a48b86/pdf-url HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/45a92057-c9b7-416b-9401-a39319a48b86/annotations HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/45a92057-c9b7-416b-9401-a39319a48b86/pdf-url HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/45a92057-c9b7-416b-9401-a39319a48b86/annotations HTTP/1.1" 200 OK
+INFO:     ('34.71.39.87', 34960) - "WebSocket /api/ws?ticket=m03xqJJ2ra7iz5iei3V5KnwiHHlKSvS9GisnliK_GaY" [accepted]
+INFO:     connection open
+2026-09-01 21:16:31,692 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/45a92057-c9b7-416b-9401-a39319a48b86/pdf-stream?expires=1788297691&signature=5fb218d698d1e78af9f5ac8ea8975a676185bad7ee507f6a5ab2fd95da613a2b HTTP/1.1" 200 OK
+2026-09-01 21:16:34,171 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:35,968 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:37,910 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:39,992 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:43,290 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:45,316 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:46,941 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:48,327 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:49,758 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:51,647 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:52,797 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:54,092 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:55,125 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:56,494 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:16:56,952 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+2026-09-01 21:17:07,423 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/followsci/bert-ai-text-detector/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-09-01 21:17:07,424 | WARNING | huggingface_hub.utils._http | Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-09-01 21:17:07,453 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/followsci/bert-ai-text-detector/dc41bbaff401c56d325f8466d9f8544287669aa1/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-09-01 21:17:07,520 | INFO | httpx | HTTP Request: GET https://huggingface.co/api/models/followsci/bert-ai-text-detector/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-09-01 21:17:07,597 | INFO | httpx | HTTP Request: GET https://huggingface.co/api/models/followsci/bert-ai-text-detector/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-09-01 21:17:07,697 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/followsci/bert-ai-text-detector/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-09-01 21:17:07,726 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/followsci/bert-ai-text-detector/dc41bbaff401c56d325f8466d9f8544287669aa1/config.json "HTTP/1.1 200 OK"
+2026-09-01 21:17:07,798 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/followsci/bert-ai-text-detector/resolve/main/model.safetensors "HTTP/1.1 302 Found"
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 3052.81it/s]
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+2026-09-01 21:17:28,287 | INFO | httpx | HTTP Request: POST http://localhost:8070/api/processFulltextDocument "HTTP/1.1 200 OK"
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+2026-09-01 21:17:43,283 | INFO | httpx | HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/31a63f37-2db3-45de-ab75-2099f59862ac/reviews HTTP/1.1" 404 Not Found
+WARNING:  WatchFiles detected changes in 'app/ai/logical_consistency_check.py'. Reloading...
+INFO:     Shutting down
+INFO:     connection closed
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [77668]
+2026-09-01 21:31:25,115 | INFO | grmt.main | dev mode: Base.metadata.create_all() ran against sqlite:///./grmt_dev.db
+INFO:     Started server process [93498]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     192.168.64.60:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+2026-09-01 21:32:49,133 | INFO | grmt.auth | login: user id=72655a23-170a-4fa2-ac62-6e1687fe922a
+INFO:     192.168.64.60:0 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/conferences/bdba29d3-2933-427c-8255-56201d96f3ff HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "POST /api/submissions HTTP/1.1" 201 Created
+INFO:     192.168.64.60:0 - "POST /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/upload HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "POST /api/ws/ticket HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "POST /api/ws/ticket HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/c97dbcb9-d9ae-4b82-9d4c-f3e137b36859/pdf-url HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/c97dbcb9-d9ae-4b82-9d4c-f3e137b36859/annotations HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/c97dbcb9-d9ae-4b82-9d4c-f3e137b36859/pdf-url HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/c97dbcb9-d9ae-4b82-9d4c-f3e137b36859/annotations HTTP/1.1" 200 OK
+2026-09-01 21:33:23,389 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+INFO:     ('34.71.39.87', 19472) - "WebSocket /api/ws?ticket=hM9Z_J_VlSyFysyxZXIQ80G0dKE4U7ILTXBW2x-RNwQ" [accepted]
+INFO:     connection open
+INFO:     192.168.64.60:0 - "GET /api/submissions/versions/c97dbcb9-d9ae-4b82-9d4c-f3e137b36859/pdf-stream?expires=1788298703&signature=621c180074cee8d009c55170d7999200151f595179138458284848d6a3b969f9 HTTP/1.1" 200 OK
+2026-09-01 21:33:25,688 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:27,248 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:29,144 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:31,009 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:34,248 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:36,192 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:37,557 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:38,858 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:40,228 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:42,031 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:43,046 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:44,175 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:45,056 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:46,557 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+2026-09-01 21:33:46,993 | INFO | httpx | HTTP Request: POST http://localhost:8010/v2/check "HTTP/1.1 200 OK"
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+2026-09-01 21:33:56,759 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/followsci/bert-ai-text-detector/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-09-01 21:33:56,760 | WARNING | huggingface_hub.utils._http | Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-09-01 21:33:56,778 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/followsci/bert-ai-text-detector/dc41bbaff401c56d325f8466d9f8544287669aa1/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-09-01 21:33:56,845 | INFO | httpx | HTTP Request: GET https://huggingface.co/api/models/followsci/bert-ai-text-detector/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-09-01 21:33:56,909 | INFO | httpx | HTTP Request: GET https://huggingface.co/api/models/followsci/bert-ai-text-detector/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-09-01 21:33:56,991 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/followsci/bert-ai-text-detector/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-09-01 21:33:57,011 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/followsci/bert-ai-text-detector/dc41bbaff401c56d325f8466d9f8544287669aa1/config.json "HTTP/1.1 200 OK"
+2026-09-01 21:33:57,070 | INFO | httpx | HTTP Request: HEAD https://huggingface.co/followsci/bert-ai-text-detector/resolve/main/model.safetensors "HTTP/1.1 302 Found"
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 3707.12it/s]
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+2026-09-01 21:34:18,070 | INFO | httpx | HTTP Request: POST http://localhost:8070/api/processFulltextDocument "HTTP/1.1 200 OK"
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+2026-09-01 21:34:20,564 | INFO | httpx | HTTP Request: POST http://localhost:11434/api/chat "HTTP/1.1 200 OK"
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/reviews HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/decision HTTP/1.1" 404 Not Found
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/history HTTP/1.1" 200 OK
+INFO:     192.168.64.60:0 - "GET /api/submissions/962443c8-eacb-4ea4-b9f5-d600bfaead3b/ai-report HTTP/1.1" 200 OK
