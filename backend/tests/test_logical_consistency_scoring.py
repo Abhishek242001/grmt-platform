@@ -160,3 +160,53 @@ def test_returns_none_for_both_when_neither_present():
     result = extract_abstract_and_conclusion(text)
     assert result["abstract"] is None
     assert result["conclusion"] is None
+
+
+# ── update36: real PDF-extracted-text layouts (no isolated heading line) ──
+
+def test_extracts_abstract_when_heading_flows_into_body_on_same_line():
+    # Confirmed against a real published IEEE Access paper — PDF text
+    # extraction doesn't isolate the heading on its own line the way
+    # python-docx paragraphs do.
+    text = (
+        "ABSTRACT Internet of Things (IoT) is an important technology "
+        "used in many applications.\n"
+        "INDEX TERMS Internet of Things, machine learning.\n"
+        "I. INTRODUCTION\n"
+        "Internet of Things is an important technology that can be integrated.\n"
+    )
+    result = extract_abstract_and_conclusion(text)
+    assert result["abstract"] == "Internet of Things (IoT) is an important technology used in many applications."
+
+
+def test_extracts_conclusion_with_numbered_prefix_and_inline_body():
+    # "VIII. CONCLUSION" — a roman-numeral section number directly
+    # preceding the heading word, itself flowing into body text with no
+    # line break, exactly as it appeared in the real paper this was found
+    # against.
+    text = (
+        "ABSTRACT Some claim about the results.\n"
+        "VIII. CONCLUSION The intersection of two fields has led to a new paradigm.\n"
+    )
+    result = extract_abstract_and_conclusion(text)
+    assert result["conclusion"] == "The intersection of two fields has led to a new paradigm."
+
+
+def test_extracts_conclusion_with_arabic_numbered_prefix():
+    text = "ABSTRACT Some claim.\n8. CONCLUSION Final remarks on the study.\n"
+    result = extract_abstract_and_conclusion(text)
+    assert result["conclusion"] == "Final remarks on the study."
+
+
+def test_numbered_heading_boundary_still_stops_abstract_correctly():
+    # The section-end boundary detector must also recognize a NUMBERED
+    # next heading (e.g. "I. INTRODUCTION") as a stopping point, not just
+    # an unnumbered all-caps one.
+    text = (
+        "ABSTRACT Some claim about the results reported here.\n"
+        "I. INTRODUCTION\n"
+        "This body text must not leak into the abstract.\n"
+    )
+    result = extract_abstract_and_conclusion(text)
+    assert "must not leak" not in result["abstract"]
+    assert result["abstract"] == "Some claim about the results reported here."

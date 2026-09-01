@@ -84,19 +84,47 @@ def parse_llm_response(raw: str) -> dict:
     return {"consistent": data["consistent"], "findings": data["findings"]}
 
 
+_NUMBERING_PREFIX = r"(?:(?:[IVXLCDM]+|\d+)[.\)]\s*)?"
+
+
 def extract_abstract_and_conclusion(text: str) -> dict:
     """Pure regex-based section extraction — locates the ABSTRACT and
     CONCLUSION(S) sections by heading, up to the next all-caps heading
     or end of document. Returns {"abstract": str|None, "conclusion": str|None}
     — either can be None if not found, which the caller must handle (can't
-    run this check meaningfully without both sections present)."""
+    run this check meaningfully without both sections present).
+
+    Handles two real-world layouts, confirmed against an actual published
+    IEEE Access paper (update36):
+    - .docx-style: heading alone on its own line, body starts on the next
+      line (the original, still-supported case).
+    - PDF-extracted-text style: the heading flows directly into the body
+      text on the same line (e.g. "ABSTRACT Internet of Things..."), and a
+      numbered section prefix may precede the heading itself (e.g. "VIII.
+      CONCLUSION The intersection..."). PDF text extraction doesn't
+      preserve the paragraph-per-line structure python-docx gives for free,
+      so the heading is no longer guaranteed to be isolated."""
+    def _find_heading_end(heading_pattern: str) -> int | None:
+        match = re.search(rf"(?im)^\s*{_NUMBERING_PREFIX}{heading_pattern}\b", text)
+        return match.end() if match else None
+
+    def _find_next_heading_start(from_index: int) -> int | None:
+        # Same "run of uppercase/space/hyphen, min 4 chars" trick as the
+        # original: a mixed-case word (i.e. real body text) breaks the
+        # character class immediately, so this naturally stops at the
+        # heading/body boundary even when they share a line. Anchored to
+        # start-of-line so it doesn't fire on capitalized acronyms
+        # (IoT, AI, ROI) sitting mid-sentence.
+        match = re.search(rf"(?m)^\s*{_NUMBERING_PREFIX}[A-Z][A-Z \-]{{3,}}\b", text[from_index:])
+        return from_index + match.start() if match else None
+
     def _extract_section(heading_pattern: str) -> str | None:
-        match = re.search(
-            rf"(?im)^\s*{heading_pattern}\s*\n+(.*?)(?=\n\s*[A-Z][A-Z \-]{{3,}}\s*\n|\Z)",
-            text,
-            re.DOTALL,
-        )
-        return match.group(1).strip() if match else None
+        heading_end = _find_heading_end(heading_pattern)
+        if heading_end is None:
+            return None
+        next_start = _find_next_heading_start(heading_end)
+        section_text = text[heading_end:next_start] if next_start is not None else text[heading_end:]
+        return section_text.strip() or None
 
     abstract = _extract_section(r"ABSTRACT")
     conclusion = _extract_section(r"CONCLUSIONS?")
