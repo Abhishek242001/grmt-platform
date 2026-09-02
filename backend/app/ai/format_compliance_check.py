@@ -11,8 +11,8 @@ this with publisher_format="springer" returns a clear error rather than
 silently running IEEE's rules against a Springer paper.
 
 Scope of this pass: page size, column count, margins, body font size, page
-limit (PDF only — .docx page count isn't knowable without rendering, tied to
-the still-pending Word->PDF pipeline), and structure presence (Abstract,
+limit (PDF always; .docx now too, via the already-converted PDF from the
+Word->PDF pipeline — update38), and structure presence (Abstract,
 References, Roman-numeral section headings). Deferred — needs GROBID, not
 yet stood up: citation-to-reference resolution, full section-order beyond
 presence, equation numbering.
@@ -21,6 +21,7 @@ import os
 import re
 
 from app.ai.grammar_check import _BODY_END_PATTERN, _BODY_START_PATTERN, extract_text
+from docx.document import Document as DocumentObject
 
 IEEE_RULES = {
     # Page-size-aware margins — IEEE does not have one universal format; it
@@ -88,12 +89,63 @@ def _effective_font_size(paragraph, run) -> float | None:
     return None
 
 
-def _measure_docx(file_path: str) -> dict:
+def _dominant_section_index(doc: DocumentObject) -> int:
+    """Returns the index of the section containing the most body text
+    (by character count), not just the positionally-last one.
+
+    Confirmed necessary against a real third-party IEEE template (not a
+    contrived edge case): that file has 5 sections, but 4 of them are
+    near-empty structural artifacts — a single-line title-page section, a
+    stray 3-column note, and a trailing single-paragraph editorial
+    callout ("This text should not be here in the final version!") that
+    reverts to the OOXML column default (1) after the real 2-column body.
+    Using sections[-1] (the heuristic already used for margins/page-size
+    elsewhere in this file, which IS correct there for this same document
+    — margins happen to be consistent across all 5 sections) would have
+    picked that trailing 1-column artifact and reported the wrong column
+    count for a genuinely 2-column paper."""
+    from docx.oxml.ns import qn
+
+    section_idx = 0
+    char_counts = {0: 0}
+    for p in doc.paragraphs:
+        char_counts[section_idx] = char_counts.get(section_idx, 0) + len(p.text)
+        pPr = p._p.find(qn("w:pPr"))
+        if pPr is not None and pPr.find(qn("w:sectPr")) is not None:
+            section_idx += 1
+            char_counts.setdefault(section_idx, 0)
+
+    return max(char_counts, key=char_counts.get)
+
+
+def _extract_column_count(doc: DocumentObject) -> int:
+    """Reads the real column count from the dominant section's <w:cols>
+    element. OOXML's own default when w:cols (or its w:num attribute) is
+    absent is 1 column — not an unknown/error state, an explicit spec
+    default (ECMA-376 §17.6.4)."""
+    from docx.oxml.ns import qn
+
+    idx = _dominant_section_index(doc)
+    sectPr = doc.sections[idx]._sectPr
+    cols_el = sectPr.find(qn("w:cols"))
+    if cols_el is None:
+        return 1
+    num = cols_el.get(qn("w:num"))
+    return int(num) if num else 1
+
+
+def _measure_docx(file_path: str, converted_pdf_path: str | None = None) -> dict:
     """Reads margins/page-size directly from the .docx's stored section
     properties — exact values, no measurement/inference needed (the format
-    already stores them as explicit metadata). Column count isn't exposed as
-    a simple python-docx property (would need raw XML digging into <w:cols>)
-    — left as None rather than risk an untested guess."""
+    already stores them as explicit metadata).
+
+    Page count (update38) reuses the PDF `_run_ai_checks_and_store` already
+    converted this same .docx to (for the citation check / PDF viewer),
+    rather than triggering a second, independent LibreOffice conversion
+    just for this — that would duplicate real, non-trivial external-process
+    work per submission for no benefit. If no converted PDF path is given
+    (or the conversion hadn't completed/failed), page_count stays None,
+    same graceful-degradation behavior as before this feature existed."""
     from app.ai.docx_utils import open_docx
 
     doc = open_docx(file_path)
@@ -103,6 +155,11 @@ def _measure_docx(file_path: str) -> dict:
     # the last section is consistently the main-body formatting. Mirrors
     # the same reasoning already applied to PDF page selection (page index
     # 1, not 0) for the identical underlying reason.
+    #
+    # NOTE: column count deliberately does NOT use this same last-section
+    # heuristic — see _dominant_section_index()'s docstring for why a real
+    # document broke that assumption specifically for columns (while
+    # leaving margins unaffected, so that logic is untouched here).
     section = doc.sections[-1]
 
     font_sizes = []
@@ -112,6 +169,16 @@ def _measure_docx(file_path: str) -> dict:
             if size is not None:
                 font_sizes.append(size)
 
+    page_count = None
+    if converted_pdf_path and os.path.isfile(converted_pdf_path):
+        try:
+            import pymupdf
+
+            with pymupdf.open(converted_pdf_path) as pdf:
+                page_count = len(pdf)
+        except Exception:
+            page_count = None  # a bad/corrupt converted PDF shouldn't crash the whole format check
+
     return {
         "page_width_in": round(section.page_width.inches, 2),
         "page_height_in": round(section.page_height.inches, 2),
@@ -119,9 +186,9 @@ def _measure_docx(file_path: str) -> dict:
         "margin_bottom_in": round(section.bottom_margin.inches, 2),
         "margin_left_in": round(section.left_margin.inches, 2),
         "margin_right_in": round(section.right_margin.inches, 2),
-        "columns": None,
+        "columns": _extract_column_count(doc),
         "body_font_size_pt": round(sum(font_sizes) / len(font_sizes), 1) if font_sizes else None,
-        "page_count": None,  # not knowable from .docx without rendering
+        "page_count": page_count,
     }
 
 
@@ -199,7 +266,7 @@ def _measure_pdf(file_path: str) -> dict:
     }
 
 
-def run_format_compliance_check(file_path: str, publisher_format: str = "ieee") -> dict:
+def run_format_compliance_check(file_path: str, publisher_format: str = "ieee", converted_pdf_path: str | None = None) -> dict:
     if publisher_format.lower() != "ieee":
         return {
             "status": "error",
@@ -210,7 +277,7 @@ def run_format_compliance_check(file_path: str, publisher_format: str = "ieee") 
     ext = os.path.splitext(file_path)[1].lower()
     try:
         if ext == ".docx":
-            measurements = _measure_docx(file_path)
+            measurements = _measure_docx(file_path, converted_pdf_path=converted_pdf_path)
         elif ext == ".pdf":
             measurements = _measure_pdf(file_path)
         else:

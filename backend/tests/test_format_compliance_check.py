@@ -31,6 +31,7 @@ def _make_ieee_compliant_docx(path: str) -> str:
     section.bottom_margin = Inches(1.125)
     section.left_margin = Inches(0.8125)
     section.right_margin = Inches(0.8125)
+    _set_column_count(section, 2)  # update38: a genuinely compliant IEEE doc is 2-column
 
     p = doc.add_paragraph()
     run = p.add_run("This is body text at the correct font size.")
@@ -73,7 +74,173 @@ def test_measure_docx_reads_exact_stored_margins():
     assert abs(measurements["margin_top_in"] - 1.0) < 0.01
     assert abs(measurements["margin_left_in"] - 0.8125) < 0.01  # can round slightly depending on float repr — check closeness, not exact equality
     assert measurements["body_font_size_pt"] == 10.0
-    assert measurements["columns"] is None  # documented limitation, not measured for docx
+    # A genuinely IEEE-compliant document is 2-column — the fixture sets
+    # this explicitly (update38; see the dedicated column-count tests below
+    # for the extraction logic itself).
+    assert measurements["columns"] == 2
+
+
+def _set_column_count(section, num: int) -> None:
+    """Test helper — python-docx has no high-level API for <w:cols>, so set
+    it directly via the section's underlying sectPr element, the same way
+    a real Word-saved 2-column IEEE template stores it."""
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+
+    sectPr = section._sectPr
+    cols = sectPr.find(qn("w:cols"))
+    if cols is None:
+        cols = OxmlElement("w:cols")
+        sectPr.append(cols)
+    cols.set(qn("w:num"), str(num))
+
+
+def test_measure_docx_detects_two_column_section():
+    doc = Document()
+    _set_column_count(doc.sections[0], 2)
+    doc.add_paragraph("Body text in a genuinely two-column section.")
+    path = "/tmp/_test_two_column.docx"
+    doc.save(path)
+
+    measurements = _measure_docx(path)
+    assert measurements["columns"] == 2
+
+
+def test_measure_docx_uses_section_with_most_content_not_last_section():
+    """Reproduces a real structural pattern found in an actual third-party
+    IEEE template (update38): a short, low-content trailing section (a
+    stray editorial note) reverting to the OOXML column default (1) after
+    the real, substantial 2-column body. Using the positionally-last
+    section — the heuristic this file already uses for margins, correctly,
+    since margins happened to be consistent across every section in that
+    real document — would misreport the column count here. The section
+    with the most actual body text must win, not whichever comes last."""
+    doc = Document()
+
+    # Section 0: the real body — substantial content, 2 columns.
+    _set_column_count(doc.sections[0], 2)
+    for _ in range(20):
+        doc.add_paragraph("A substantial paragraph of real body text in the main two-column section.")
+
+    # Start a new section via a section break, then add a short trailing
+    # paragraph with NO explicit <w:cols> — reverts to the OOXML default
+    # of 1 column, exactly like the real template's trailing note.
+    new_section = doc.add_section()
+    doc.add_paragraph("Trailing single-line note.")
+
+    path = "/tmp/_test_dominant_section.docx"
+    doc.save(path)
+
+    measurements = _measure_docx(path)
+    assert measurements["columns"] == 2
+
+
+# ── update38: .docx page count, via the already-converted PDF ──
+#
+# pymupdf is mocked here (not exercised for real) — matching this project's
+# own established pattern for external-dependency tests (e.g.
+# test_citation_check.py's mocked GROBID responses). This verifies
+# _measure_docx's OWN logic — that it opens the given converted_pdf_path
+# with pymupdf and reports len() as page_count, and degrades gracefully
+# when no usable PDF is available. It does NOT verify pymupdf itself works
+# correctly against a real PDF — that needs confirming in an environment
+# with pymupdf actually installed, separately from this unit test.
+
+def _install_fake_pymupdf(monkeypatch_dict: dict, page_count: int):
+    import sys
+    import types
+
+    fake_module = types.ModuleType("pymupdf")
+
+    class _FakeDoc:
+        def __init__(self, n):
+            self._n = n
+
+        def __len__(self):
+            return self._n
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return False
+
+    fake_module.open = lambda path: _FakeDoc(page_count)
+    monkeypatch_dict["previous"] = sys.modules.get("pymupdf")
+    sys.modules["pymupdf"] = fake_module
+
+
+def _restore_pymupdf(monkeypatch_dict: dict):
+    import sys
+
+    if monkeypatch_dict.get("previous") is not None:
+        sys.modules["pymupdf"] = monkeypatch_dict["previous"]
+    else:
+        sys.modules.pop("pymupdf", None)
+
+
+def test_measure_docx_reads_page_count_from_converted_pdf():
+    state = {}
+    try:
+        _install_fake_pymupdf(state, page_count=5)
+        path = _make_ieee_compliant_docx("/tmp/_test_page_count.docx")
+        fake_pdf_path = "/tmp/_test_page_count_fake.pdf"
+        with open(fake_pdf_path, "wb") as f:
+            f.write(b"%PDF-1.4 fake content, never actually opened by the fake pymupdf.open above")
+
+        measurements = _measure_docx(path, converted_pdf_path=fake_pdf_path)
+        assert measurements["page_count"] == 5
+    finally:
+        _restore_pymupdf(state)
+
+
+def test_measure_docx_page_count_is_none_without_converted_pdf():
+    """No converted PDF path given (e.g. Word->PDF conversion hasn't run
+    yet, or isn't wired up for some caller) — page_count stays None,
+    same graceful behavior as before this feature existed. Doesn't even
+    need pymupdf to be installed, real or fake, since the function
+    shouldn't try to import it at all in this path."""
+    path = _make_ieee_compliant_docx("/tmp/_test_no_pdf.docx")
+    measurements = _measure_docx(path, converted_pdf_path=None)
+    assert measurements["page_count"] is None
+
+
+def test_measure_docx_page_count_gracefully_none_on_missing_converted_pdf_file():
+    """converted_pdf_path given but points at a file that doesn't actually
+    exist (e.g. conversion was reported as started but never completed) —
+    must not crash the whole format check over a missing page count."""
+    path = _make_ieee_compliant_docx("/tmp/_test_missing_pdf.docx")
+    measurements = _measure_docx(path, converted_pdf_path="/nonexistent/path/does/not/exist.pdf")
+    assert measurements["page_count"] is None
+
+
+def test_measure_docx_page_count_gracefully_none_when_pymupdf_raises():
+    """A converted PDF exists on disk but is somehow unreadable (corrupt,
+    truncated mid-write) — pymupdf.open() raising must not crash the
+    whole format check, just leave page_count as None."""
+    import sys
+    import types
+
+    state = {}
+    try:
+        fake_module = types.ModuleType("pymupdf")
+
+        def _raise(path):
+            raise RuntimeError("simulated: corrupt or unreadable PDF")
+
+        fake_module.open = _raise
+        state["previous"] = sys.modules.get("pymupdf")
+        sys.modules["pymupdf"] = fake_module
+
+        path = _make_ieee_compliant_docx("/tmp/_test_corrupt_pdf.docx")
+        real_but_bad_pdf = "/tmp/_test_corrupt_pdf_target.pdf"
+        with open(real_but_bad_pdf, "wb") as f:
+            f.write(b"not actually a valid pdf")
+
+        measurements = _measure_docx(path, converted_pdf_path=real_but_bad_pdf)
+        assert measurements["page_count"] is None
+    finally:
+        _restore_pymupdf(state)
 
 
 def test_measure_docx_falls_back_to_style_inherited_font_size():

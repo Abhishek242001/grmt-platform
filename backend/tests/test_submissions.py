@@ -608,6 +608,8 @@ def test_upload_also_runs_format_compliance_check(client, monkeypatch):
 
     from docx import Document as DocxDocument
     from docx.shared import Inches, Pt
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
 
     doc = DocxDocument()
     section = doc.sections[0]
@@ -615,6 +617,19 @@ def test_upload_also_runs_format_compliance_check(client, monkeypatch):
     section.bottom_margin = Inches(1.125)
     section.left_margin = Inches(0.8125)
     section.right_margin = Inches(0.8125)
+    # A genuinely IEEE-compliant document is 2-column (update38 added real
+    # column-count measurement — previously always None/unmeasured, so this
+    # fixture's implicit 1-column default was never actually exercised).
+    # python-docx's Document() already creates a default <w:cols> element
+    # as part of its standard sectPr template — must find and modify that
+    # existing element, not blindly append a second one (which would sit
+    # AFTER the original in document order and never be found first by
+    # sectPr.find(), the same lookup _extract_column_count() uses).
+    cols = section._sectPr.find(qn("w:cols"))
+    if cols is None:
+        cols = OxmlElement("w:cols")
+        section._sectPr.append(cols)
+    cols.set(qn("w:num"), "2")
     p = doc.add_paragraph()
     run = p.add_run("Body text at the correct IEEE font size.")
     run.font.size = Pt(10)

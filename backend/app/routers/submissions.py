@@ -163,7 +163,12 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
 
         checks_to_run = [
             ("grammar", lambda: run_grammar_check(file_path)),
-            ("format", lambda: run_format_compliance_check(file_path, publisher_format=publisher_format)),
+            (
+                "format",
+                lambda: run_format_compliance_check(
+                    file_path, publisher_format=publisher_format, converted_pdf_path=converted_pdf_path
+                ),
+            ),
             ("table_figure", lambda: run_table_figure_check(file_path)),
             # Real GPU inference (followsci BERT model) — meaningfully
             # slower than the three checks above and needs torch/
