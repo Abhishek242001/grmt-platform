@@ -17,6 +17,11 @@ backend/secrets/*.pem
 *.log
 log.txt
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # OS
 .DS_Store
 backend/uploads/
