@@ -324,12 +324,25 @@ export interface TableFigureCheckResult {
   issues: string[];
 }
 
+export interface HighlightBox {
+  xPct: number;
+  yPct: number;
+  wPct: number;
+  hPct: number;
+}
+
+export interface HighlightBoxesForPage {
+  page: number;
+  boxes: HighlightBox[];
+}
+
 export interface FlaggedAiChunk {
   text: string;
   start_char: number;
   end_char: number;
   word_count: number;
   ai_probability: number;
+  highlight_boxes?: HighlightBoxesForPage[];
 }
 
 export interface AiTextDetectionResult {

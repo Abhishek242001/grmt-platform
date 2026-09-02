@@ -34,10 +34,18 @@ export default function PdfAnnotationViewer({
   versionId,
   canAnnotate,
   currentUserId,
+  aiHighlights,
 }: {
   versionId: string;
   canAnnotate: boolean;
   currentUserId: string;
+  // Optional — AI-text-detection's flagged passages, pre-flattened across
+  // all flagged chunks (possibly several entries sharing the same page
+  // number, from different chunks). Purely visual, no interaction — unlike
+  // the click-to-comment pins above, these aren't something a reviewer
+  // creates or deletes. Absent entirely when the caller has no AI-text
+  // report yet, or the check found nothing to flag.
+  aiHighlights?: api.HighlightBoxesForPage[];
 }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -167,6 +175,33 @@ export default function PdfAnnotationViewer({
           >
             <Page pageNumber={pageNumber} width={640} />
           </Document>
+
+          {/* AI-text-detection highlight boxes — purely visual, rendered
+              underneath the interactive pin annotations below. Filtered to
+              entries matching the CURRENTLY DISPLAYED page only; a chunk
+              spanning two pages contributes a separate entry per page (see
+              ai_text_highlighting.py's compute_highlight_boxes), so this
+              naturally only shows what belongs on this page without extra
+              logic here. pointer-events-none so these never intercept
+              clicks meant for handlePageClick (leaving a new pin) or the
+              pins/popovers themselves. */}
+          {aiHighlights &&
+            aiHighlights
+              .filter((entry) => entry.page === pageNumber)
+              .flatMap((entry) => entry.boxes)
+              .map((box, i) => (
+                <div
+                  key={i}
+                  className="pointer-events-none absolute border-2 border-amber-500 bg-amber-400/25"
+                  style={{
+                    left: `${box.xPct}%`,
+                    top: `${box.yPct}%`,
+                    width: `${box.wPct}%`,
+                    height: `${box.hPct}%`,
+                  }}
+                  title="Flagged as possibly AI-generated"
+                />
+              ))}
 
           {pageAnnotations.map((a) => {
             let pos = { x: 50, y: 50 };

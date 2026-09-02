@@ -177,7 +177,10 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
             # {"status": "error", ...} result (not a crash) if torch/
             # transformers aren't installed or no GPU is available — see
             # ai_content_pipeline.run_pipeline's try/except around scoring.
-            ("ai_text", lambda: run_ai_text_detection_check(file_path)),
+            (
+                "ai_text",
+                lambda: run_ai_text_detection_check(file_path, pdf_path_for_highlighting=converted_pdf_path or file_path),
+            ),
             # GROBID needs a real PDF specifically — uses the converted
             # path from _convert_to_pdf_and_store above (works for both
             # .docx submissions, once converted, and .pdf submissions,

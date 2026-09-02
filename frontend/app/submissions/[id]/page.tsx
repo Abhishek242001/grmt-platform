@@ -160,6 +160,24 @@ function TableFigureReportCard({ report }: { report: api.AIReport }) {
   );
 }
 
+// Finds the ai_text report (if any, if complete) among all check reports
+// and flattens every flagged chunk's highlight_boxes into one array —
+// PdfAnnotationViewer just needs page-filtered boxes to draw, not the full
+// per-chunk structure (text, probability, etc.) that AiTextDetectionReportCard
+// itself renders separately.
+function extractAiHighlights(aiReports: api.AIReport[]): api.HighlightBoxesForPage[] {
+  const report = aiReports.find((r) => r.check_type === 'ai_text');
+  if (!report?.result_json) return [];
+  let result: api.AiTextDetectionResult | null = null;
+  try {
+    result = JSON.parse(report.result_json);
+  } catch {
+    return [];
+  }
+  if (!result || result.status !== 'complete' || !result.flagged_chunks) return [];
+  return result.flagged_chunks.flatMap((chunk) => chunk.highlight_boxes ?? []);
+}
+
 function AiTextDetectionReportCard({ report }: { report: api.AIReport }) {
   let result: api.AiTextDetectionResult | null = null;
   try {
@@ -492,6 +510,7 @@ export default function SubmissionDetailPage() {
                   versionId={history[history.length - 1].id}
                   canAnnotate={user.role === 'reviewer'}
                   currentUserId={user.id}
+                  aiHighlights={extractAiHighlights(aiReports)}
                 />
               </div>
             )}

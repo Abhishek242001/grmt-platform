@@ -207,3 +207,115 @@ def test_pipeline_uses_followsci_by_default_when_no_scorer_given(tmp_path):
 
     assert mock_scorer.called
     assert result["ai_generated_percentage"] == pytest.approx(100.0)
+
+
+# ── run_pipeline — highlighting wiring (update41) ──
+
+def test_docx_flagged_chunks_have_empty_highlight_boxes_with_no_pdf(tmp_path):
+    """The pre-update41 default: a .docx with no pdf_path_for_highlighting
+    given at all — highlighting is skipped entirely, but the key is still
+    present (empty list), not missing, so callers never have to branch on
+    a maybe-absent key."""
+    text = "human words here " * 5 + "AIWORD AIWORD AIWORD " * 5 + "more human words here " * 5
+
+    def fake_scorer(t):
+        return {"ai_probability": 0.9 if "AIWORD" in t else 0.1}
+
+    path = _make_docx(str(tmp_path / "paper.docx"), text)
+    result = run_pipeline(path, words_per_chunk=15, scorer=fake_scorer)
+
+    assert result["flagged_chunk_count"] == 1
+    assert result["flagged_chunks"][0]["highlight_boxes"] == []
+
+
+def test_docx_with_failed_conversion_degrades_to_empty_highlight_boxes(tmp_path):
+    """pdf_path_for_highlighting given but pointing at a non-.pdf path (the
+    real-world shape of a failed Word->PDF conversion, where
+    submissions.py's converted_pdf_path ends up None and falls back to the
+    original file_path) — must not crash, must not attempt PyMuPDF at all
+    since the extension check catches this before that point."""
+    text = "human words here " * 5 + "AIWORD AIWORD AIWORD " * 5 + "more human words here " * 5
+
+    def fake_scorer(t):
+        return {"ai_probability": 0.9 if "AIWORD" in t else 0.1}
+
+    path = _make_docx(str(tmp_path / "paper.docx"), text)
+    # Simulates converted_pdf_path being None -> submissions.py's fallback
+    # `converted_pdf_path or file_path` resolves to the .docx itself.
+    result = run_pipeline(path, words_per_chunk=15, scorer=fake_scorer, pdf_path_for_highlighting=path)
+
+    assert result["flagged_chunk_count"] == 1
+    assert result["flagged_chunks"][0]["highlight_boxes"] == []
+
+
+def test_real_pdf_extraction_used_when_pdf_path_for_highlighting_is_pdf(tmp_path):
+    """When a real converted PDF is given, extraction must run against
+    THAT file (for a real page_map), not the original .docx — confirmed by
+    mocking extract_text and checking which path it was actually called
+    with. This is the core of the update41 fix: previously page_map was
+    always None for .docx regardless of what PDF was available."""
+    text = " ".join(["word"] * 30)
+    docx_path = _make_docx(str(tmp_path / "paper.docx"), text)
+    fake_pdf_path = str(tmp_path / "paper.pdf")
+    with open(fake_pdf_path, "wb") as f:
+        f.write(b"%PDF-1.4 fake, never actually opened since extract_text is mocked below")
+
+    fake_scorer = lambda t: {"ai_probability": 0.1}  # noqa: E731
+
+    with patch("app.ai.ai_content_pipeline.extract_text") as mock_extract:
+        mock_extract.return_value = (text, [(0, len(text), 1)])
+        result = run_pipeline(docx_path, scorer=fake_scorer, pdf_path_for_highlighting=fake_pdf_path)
+
+    mock_extract.assert_called_once_with(fake_pdf_path)
+    assert result["status"] == "complete"
+
+
+def test_compute_highlight_boxes_called_when_flagged_chunks_and_real_pdf_present(tmp_path):
+    """compute_highlight_boxes should actually be invoked (and its result
+    used) when there's both a flagged chunk and a usable PDF + page_map —
+    mocked here since real PyMuPDF search_for() isn't testable in this
+    environment (see ai_text_highlighting.py's own docstring)."""
+    text = "human words here " * 5 + "AIWORD AIWORD AIWORD " * 5 + "more human words here " * 5
+    docx_path = _make_docx(str(tmp_path / "paper.docx"), text)
+    fake_pdf_path = str(tmp_path / "paper.pdf")
+    with open(fake_pdf_path, "wb") as f:
+        f.write(b"%PDF-1.4 fake")
+
+    def fake_scorer(t):
+        return {"ai_probability": 0.9 if "AIWORD" in t else 0.1}
+
+    fake_boxes_result = "SENTINEL_RETURN_VALUE"
+
+    with patch("app.ai.ai_content_pipeline.extract_text") as mock_extract, \
+         patch("app.ai.ai_text_highlighting.compute_highlight_boxes") as mock_compute:
+        mock_extract.return_value = (text, [(0, len(text), 1)])
+        mock_compute.return_value = fake_boxes_result
+        result = run_pipeline(docx_path, words_per_chunk=15, scorer=fake_scorer, pdf_path_for_highlighting=fake_pdf_path)
+
+    assert mock_compute.called
+    assert result["flagged_chunks"] == fake_boxes_result
+
+
+def test_highlighting_failure_does_not_break_the_whole_check(tmp_path):
+    """compute_highlight_boxes raising (corrupt PDF, PyMuPDF error, etc.)
+    must degrade to empty highlight_boxes, not fail the entire AI-text
+    check — the detection result is the primary output; highlighting is a
+    bonus on top of it."""
+    text = "human words here " * 5 + "AIWORD AIWORD AIWORD " * 5 + "more human words here " * 5
+    docx_path = _make_docx(str(tmp_path / "paper.docx"), text)
+    fake_pdf_path = str(tmp_path / "paper.pdf")
+    with open(fake_pdf_path, "wb") as f:
+        f.write(b"%PDF-1.4 fake")
+
+    def fake_scorer(t):
+        return {"ai_probability": 0.9 if "AIWORD" in t else 0.1}
+
+    with patch("app.ai.ai_content_pipeline.extract_text") as mock_extract, \
+         patch("app.ai.ai_text_highlighting.compute_highlight_boxes") as mock_compute:
+        mock_extract.return_value = (text, [(0, len(text), 1)])
+        mock_compute.side_effect = RuntimeError("simulated PyMuPDF failure")
+        result = run_pipeline(docx_path, words_per_chunk=15, scorer=fake_scorer, pdf_path_for_highlighting=fake_pdf_path)
+
+    assert result["status"] == "complete"
+    assert result["flagged_chunk_count"] == 1
+    assert result["flagged_chunks"][0]["highlight_boxes"] == []

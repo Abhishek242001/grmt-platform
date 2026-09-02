@@ -26,6 +26,8 @@ signature (str -> {"ai_probability": float}) can be passed in instead, so
 swapping to a fine-tuned model later is a one-line change here, not a
 rewrite of the chunking/aggregation/highlighting logic.
 """
+import os
+
 from app.ai.grammar_check import extract_text
 from app.ai.text_chunking import DEFAULT_WORDS_PER_CHUNK, chunk_text_by_words
 
@@ -100,17 +102,51 @@ def run_pipeline(
     chunk_probability_threshold: float = DEFAULT_CHUNK_PROBABILITY_THRESHOLD,
     max_ai_percentage: float = DEFAULT_MAX_AI_PERCENTAGE,
     scorer=None,
+    pdf_path_for_highlighting: str | None = None,
 ) -> dict:
     """The real orchestrator. `scorer` defaults to followsci_check's model
     (lazy-imported here, not at module level, so this file stays importable
     without torch installed, and so tests can inject a mock scorer instead
     of needing a real GPU). Any callable matching
-    `str -> {"ai_probability": float}` can be passed instead."""
+    `str -> {"ai_probability": float}` can be passed instead.
+
+    `pdf_path_for_highlighting` (update41): a real PDF to compute bounding
+    boxes against, separate from `file_path` — text is always extracted
+    from `file_path` itself (matching the original document exactly, which
+    matters for .docx since extract_text's .docx path reads paragraph text
+    directly, not through a lossy PDF round-trip), but bounding-box search
+    needs an actual rendered PDF page to search text on. For a native .pdf
+    upload these are usually the same file; for .docx, pass the already-
+    converted PDF (see submissions.py's converted_pdf_path) so .docx
+    submissions get real highlighting too, not just native PDF uploads.
+    None (the default) skips highlighting entirely — every flagged chunk
+    still gets an empty "highlight_boxes": [] rather than a missing key."""
     if scorer is None:
         from app.ai.followsci_check import _score_text as scorer
 
+    # Prefer extracting from the real PDF when one's available, not the
+    # original file_path — this matters specifically for .docx: extract_text
+    # never returns a page_map for .docx (no fixed page concept without
+    # rendering), so scoring against the .docx directly would make
+    # highlighting permanently impossible for every .docx submission,
+    # regardless of pdf_path_for_highlighting being given. Extracting from
+    # the SAME PDF that highlighting will search keeps chunk boundaries and
+    # page_map internally consistent (searching for a chunk's exact text on
+    # the exact page it was extracted from). Trade-off, stated plainly: for
+    # a .docx with a successful conversion, scoring now runs against the
+    # PDF's column-aware extraction (pdf_text_extraction.py) rather than
+    # the .docx's direct paragraph text — these can differ slightly (minor
+    # whitespace/formatting from the conversion round-trip). Given the
+    # alternative is .docx submissions never getting highlighting at all,
+    # and citation_check.py already fully commits to the converted PDF over
+    # the original .docx with no such hedging, this is the same call this
+    # project has already made elsewhere, not a new precedent.
+    extraction_path = file_path
+    if pdf_path_for_highlighting and os.path.splitext(pdf_path_for_highlighting)[1].lower() == ".pdf":
+        extraction_path = pdf_path_for_highlighting
+
     try:
-        text, _page_map = extract_text(file_path)
+        text, page_map = extract_text(extraction_path)
     except Exception as e:
         return {"status": "error", "error": f"Could not extract text: {e}"}
 
@@ -147,6 +183,26 @@ def run_pipeline(
         for i in aggregation["flagged_chunk_indices"]
     ]
 
+    # update41: real page-anchored bounding boxes, when a PDF is available.
+    # Only attempted for .pdf text extraction (page_map is real) with a real
+    # PDF path given — .docx with no converted PDF, or extraction that
+    # returned no page_map for any other reason, degrades gracefully to an
+    # empty highlight_boxes list per chunk rather than erroring the whole
+    # check over a feature that's inherently best-effort (see
+    # ai_text_highlighting.py's own docstring on match-rate limitations).
+    if pdf_path_for_highlighting and page_map:
+        try:
+            from app.ai.ai_text_highlighting import compute_highlight_boxes
+
+            flagged_chunks = compute_highlight_boxes(pdf_path_for_highlighting, flagged_chunks, page_map)
+        except Exception:
+            # Highlighting is a bonus on top of the actual detection result
+            # — a failure here (corrupt PDF, PyMuPDF error) must not take
+            # down the whole AI-text check. Fall back to empty boxes.
+            flagged_chunks = [{**c, "highlight_boxes": []} for c in flagged_chunks]
+    else:
+        flagged_chunks = [{**c, "highlight_boxes": []} for c in flagged_chunks]
+
     return {
         "status": "complete",
         "ai_generated_percentage": aggregation["ai_generated_percentage"],
@@ -161,7 +217,7 @@ def run_pipeline(
     }
 
 
-def run_ai_text_detection_check(file_path: str) -> dict:
+def run_ai_text_detection_check(file_path: str, pdf_path_for_highlighting: str | None = None) -> dict:
     """Thin naming-convention alias for run_pipeline() — every other check
     in this project is called via run_<check_type>_check(file_path)
     (run_grammar_check, run_format_compliance_check, run_table_figure_check),
@@ -172,7 +228,7 @@ def run_ai_text_detection_check(file_path: str) -> dict:
     against the organizer's real configured threshold happens separately
     in gate_engine.py's _ai_text_passes, not here — same separation of
     concerns as every other check."""
-    return run_pipeline(file_path)
+    return run_pipeline(file_path, pdf_path_for_highlighting=pdf_path_for_highlighting)
 
 
 def run_manual_verification():
