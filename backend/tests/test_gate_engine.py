@@ -83,14 +83,16 @@ def test_soft_gate_failure_does_not_hard_fail(client):
         _make_grammar_report(db, sub.id, score=50)  # below threshold, but SOFT — must not hard-fail
 
         new_status = evaluate_submission_gates(sub.id, db)
-        assert new_status == "in_human_review"
+        assert new_status == "ai_review_passed"
     finally:
         db.close()
 
 
-def test_passing_score_results_in_human_review_not_ai_review_passed(client):
-    """With only 1 of 7 checks implemented, the engine must never claim
-    ai_review_passed — that would falsely imply the full pipeline ran clean."""
+def test_passing_score_results_in_ai_review_passed_awaiting_researcher_submit(client):
+    """update51 — the engine now returns "ai_review_passed" for a clean
+    pass, not "in_human_review" directly. The researcher must explicitly
+    call POST .../submit-for-review (submissions.py) to advance further —
+    see test_submissions.py for that gate."""
     db = _db_session()
     try:
         org = _make_user(db, role="organizer", email="org3@example.com")
@@ -104,8 +106,8 @@ def test_passing_score_results_in_human_review_not_ai_review_passed(client):
         _make_grammar_report(db, sub.id, score=95)  # comfortably passes
 
         new_status = evaluate_submission_gates(sub.id, db)
-        assert new_status == "in_human_review"
-        assert new_status != "ai_review_passed"
+        assert new_status == "ai_review_passed"
+        assert new_status != "in_human_review"
     finally:
         db.close()
 
@@ -122,7 +124,7 @@ def test_no_gate_rule_configured_does_not_block(client):
         _make_grammar_report(db, sub.id, score=10)  # terrible score, but nothing configured to gate on it
 
         new_status = evaluate_submission_gates(sub.id, db)
-        assert new_status == "in_human_review"
+        assert new_status == "ai_review_passed"
     finally:
         db.close()
 
@@ -172,10 +174,11 @@ def test_ai_text_soft_gate_never_hard_fails_regardless_of_score(client):
     """Since ai_text can only ever be a SOFT gate (see above), even a
     badly-failing check (90% AI-generated, way over any reasonable
     threshold) must never push the submission to "ai_review_hard_failed"
-    — it can only ever leave things at "in_human_review", where an actual
-    person makes the final call. This is the end-to-end confirmation that
-    the safety guarantee holds all the way through evaluate_submission_gates,
-    not just at GateRule-creation time."""
+    — it can only ever leave things at "ai_review_passed" (update51: the
+    researcher-confirm checkpoint before human review), where an actual
+    person eventually makes the final call. This is the end-to-end
+    confirmation that the safety guarantee holds all the way through
+    evaluate_submission_gates, not just at GateRule-creation time."""
     db = _db_session()
     try:
         org = _make_user(db, role="organizer", email="org6@example.com")
@@ -189,7 +192,7 @@ def test_ai_text_soft_gate_never_hard_fails_regardless_of_score(client):
         _make_ai_text_report(db, sub.id, ai_generated_percentage=90.0)  # about as bad as it gets
 
         new_status = evaluate_submission_gates(sub.id, db)
-        assert new_status == "in_human_review"
+        assert new_status == "ai_review_passed"
         assert new_status != "ai_review_hard_failed"
     finally:
         db.close()
@@ -238,3 +241,33 @@ def test_ai_text_passes_evaluator_ignores_reports_own_baked_in_verdict():
 
     result = {"ai_generated_percentage": 12.0, "overall_verdict": "accept"}  # its own baked-in verdict says accept
     assert _ai_text_passes(result, threshold=10.0) is False  # but the real, stricter threshold must reject it
+
+
+def test_plagiarism_passes_evaluator_score_direction_not_inverted(): 
+    """Unlike ai_text, plagiarism_check.py's score is deliberately already
+    in the "higher is better" direction (score = (1 - similarity) * 100),
+    matching grammar/format/table_figure/citation/logical_consistency's
+    convention — so this evaluator uses plain score >= threshold, NOT
+    ai_text's inverted comparison. Direct unit test of the evaluator
+    itself, same reasoning as test_ai_text_passes_evaluator_inverted_
+    comparison_direction above: this check is in NEVER_HARD_GATE, so
+    evaluate_submission_gates' return value alone can't distinguish
+    pass from fail for this check_type."""
+    from app.core.gate_engine import _plagiarism_passes
+
+    # High similarity found -> low score -> below threshold -> fails.
+    assert _plagiarism_passes({"score": 20.0}, threshold=70.0) is False
+
+    # Low similarity -> high score -> passes.
+    assert _plagiarism_passes({"score": 95.0}, threshold=70.0) is True
+
+    # Exactly at threshold -> passes (>=, same convention as the other
+    # non-inverted evaluators in this file).
+    assert _plagiarism_passes({"score": 70.0}, threshold=70.0) is True
+
+    # No threshold configured -> informational only, never gates.
+    assert _plagiarism_passes({"score": 0.0}, threshold=None) is True
+
+    # Check itself errored (no score in the result) -> don't gate on a
+    # failed check, same convention as every other evaluator.
+    assert _plagiarism_passes({"status": "error"}, threshold=70.0) is True

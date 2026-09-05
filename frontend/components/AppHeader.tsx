@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth-context';
+import type { User } from '@/lib/api';
 
 const ROLE_LABEL: Record<string, string> = {
   researcher: 'Researcher',
@@ -10,8 +11,21 @@ const ROLE_LABEL: Record<string, string> = {
   platform_admin: 'Platform Admin',
 };
 
-export default function AppHeader() {
-  const { user, logout } = useAuth();
+interface AppHeaderProps {
+  // update51 — optional override so the admin dashboard (a separate,
+  // sessionStorage-based identity — see admin-auth-context.tsx) can supply
+  // its OWN user/logout instead of this component silently falling back to
+  // the shared researcher/organizer/reviewer session, which would show the
+  // wrong identity entirely (or nothing) on that page, and whose logout
+  // button would act on the wrong session.
+  user?: User | null;
+  onLogout?: () => void;
+}
+
+export default function AppHeader({ user: userOverride, onLogout }: AppHeaderProps = {}) {
+  const shared = useAuth();
+  const user = userOverride !== undefined ? userOverride : shared.user;
+  const logout = onLogout ?? shared.logout;
 
   return (
     <header className="border-b border-[var(--color-line)] bg-white">

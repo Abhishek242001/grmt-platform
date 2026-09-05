@@ -330,6 +330,196 @@ function LogicalConsistencyReportCard({ report }: { report: api.AIReport }) {
   );
 }
 
+function PlagiarismReportCard({ report }: { report: api.AIReport }) {
+  let result: api.PlagiarismCheckResult | null = null;
+  try {
+    result = report.result_json ? JSON.parse(report.result_json) : null;
+  } catch {
+    result = null;
+  }
+
+  if (!result || result.status !== 'complete') {
+    return (
+      <div className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm text-[var(--color-ink)]/50">
+        Plagiarism check unavailable: {result?.error ?? 'unknown error'}
+      </div>
+    );
+  }
+
+  const external = result.external;
+
+  return (
+    <div className="mt-3 border-t border-[var(--color-line)] pt-4">
+      <div className="flex items-center gap-4">
+        <span className="font-bold">Plagiarism</span>
+        {result.score !== null ? (
+          <span className="font-display-bold text-2xl text-[var(--color-accent)]">{result.score}</span>
+        ) : (
+          <span className="text-xs text-[var(--color-ink)]/50">No score computed</span>
+        )}
+        {result.candidates_compared !== undefined && (
+          <span className="text-xs text-[var(--color-ink)]/50">
+            compared against {result.candidates_compared} prior submission{result.candidates_compared === 1 ? '' : 's'}
+          </span>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-[var(--color-ink)]/40">
+        An automated similarity score is informational for reviewers, never an automatic finding of plagiarism.
+      </p>
+
+      {/* Self-submission matches — GRMT's own prior submissions */}
+      {result.matches && result.matches.length > 0 && (
+        <div className="mt-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-[var(--color-ink)]/50">
+            Matched against prior GRMT submissions
+          </div>
+          <ul className="mt-2 space-y-2">
+            {result.matches.map((m, i) => (
+              <li key={i} className="flex items-center justify-between border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm">
+                <span className="text-[var(--color-ink)]/70">Submission {m.submission_id}</span>
+                <span className="font-display-bold text-[var(--color-accent)]">{(m.similarity * 100).toFixed(1)}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* External literature comparison (Winston AI, abstract-only — see plagiarism_check.py) */}
+      <div className="mt-4">
+        <div className="text-xs font-bold uppercase tracking-wide text-[var(--color-ink)]/50">
+          External literature comparison
+        </div>
+
+        {external === null && (
+          <p className="mt-2 text-sm text-[var(--color-ink)]/50">
+            Not run — no external provider is currently active in the admin panel.
+          </p>
+        )}
+
+        {external !== null && external.status !== 'complete' && (
+          <p className="mt-2 text-sm text-[var(--color-ink)]/50">{external.error ?? 'Unknown error'}</p>
+        )}
+
+        {external !== null && external.status === 'complete' && (
+          <>
+            <div className="mt-2 flex items-center gap-4">
+              <span className="font-display-bold text-2xl text-[var(--color-accent)]">
+                {external.overall_similarity_pct?.toFixed(1)}%
+              </span>
+              <span className="text-xs text-[var(--color-ink)]/50">overall similarity (abstract only)</span>
+              {external.credits_remaining !== undefined && (
+                <span className="text-xs text-[var(--color-ink)]/40">{external.credits_remaining} credits remaining</span>
+              )}
+            </div>
+
+            {external.matches && external.matches.length > 0 ? (
+              <ul className="mt-3 space-y-2">
+                {external.matches.map((m, i) => (
+                  <li key={i} className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      {m.source_url ? (
+                        <a href={m.source_url} target="_blank" rel="noopener noreferrer" className="text-[var(--color-accent)] hover:underline">
+                          {m.source_title || m.source_url}
+                        </a>
+                      ) : (
+                        <span className="text-[var(--color-ink)]/70">{m.source_title || 'Unknown source'}</span>
+                      )}
+                      <span className="font-display-bold text-[var(--color-accent)]">{m.similarity_pct.toFixed(1)}%</span>
+                    </div>
+                    {m.can_access === false && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        Winston found this source but couldn&apos;t fetch its full text to compare — this score reflects
+                        that it couldn&apos;t be checked, not that it was checked and found dissimilar.
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-[var(--color-ink)]/50">No matching external sources found.</p>
+            )}
+          </>
+        )}
+      </div>
+
+      {result.issues.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {result.issues.map((issue, i) => (
+            <li key={i} className="border border-[var(--color-line)] bg-[var(--color-paper)] p-3 text-sm text-[var(--color-ink)]/70">
+              {issue}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// update51 — replaces the old "all 7 checks stacked vertically" layout
+// with a horizontal step-by-step wizard (per explicit request: like a job
+// application form's Personal Details → Academic Details progression).
+// Each step gets a green check once that check has actually finished
+// (status "complete"), amber for "error", grey for still pending — and
+// only the currently-selected step's full report renders below. Any step
+// can be clicked directly (not strictly linear) since this same page is
+// shared by researchers, reviewers, and organizers, who all have
+// legitimate reasons to jump straight to one specific check's results
+// rather than click through every step in order.
+const CHECK_STEPS: { type: string; label: string }[] = [
+  { type: 'grammar', label: 'Grammar' },
+  { type: 'format', label: 'Format' },
+  { type: 'table_figure', label: 'Tables & Figures' },
+  { type: 'ai_text', label: 'AI-Generated Content' },
+  { type: 'citation', label: 'Citations' },
+  { type: 'logical_consistency', label: 'Logical Consistency' },
+  { type: 'plagiarism', label: 'Plagiarism' },
+];
+
+function CheckStepper({
+  reports,
+  activeCheck,
+  onSelect,
+}: {
+  reports: api.AIReport[];
+  activeCheck: string;
+  onSelect: (checkType: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-stretch gap-0 overflow-x-auto border border-[var(--color-line)] bg-white">
+      {CHECK_STEPS.map((step, i) => {
+        const report = reports.find((r) => r.check_type === step.type);
+        const state: 'complete' | 'error' | 'pending' =
+          report?.status === 'complete' ? 'complete' : report?.status === 'error' ? 'error' : 'pending';
+        const isActive = activeCheck === step.type;
+
+        return (
+          <button
+            key={step.type}
+            type="button"
+            onClick={() => onSelect(step.type)}
+            className={`flex min-w-[130px] flex-1 items-center gap-2 border-r border-[var(--color-line)] px-3 py-3 text-left text-xs transition last:border-r-0 ${
+              isActive ? 'bg-[var(--color-accent-soft)]' : 'hover:bg-[var(--color-paper)]'
+            }`}
+          >
+            <span
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.65rem] font-bold ${
+                state === 'complete'
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : state === 'error'
+                  ? 'bg-amber-500 text-white'
+                  : 'border border-[var(--color-line)] text-[var(--color-ink)]/40'
+              }`}
+            >
+              {state === 'complete' ? '✓' : i + 1}
+            </span>
+            <span className={`font-semibold ${isActive ? 'text-[var(--color-accent)]' : ''}`}>{step.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function SubmissionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user, isLoading } = useAuth();
@@ -341,10 +531,19 @@ export default function SubmissionDetailPage() {
   const [reviews, setReviews] = useState<api.Review[]>([]);
   const [aiReports, setAiReports] = useState<api.AIReport[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeCheck, setActiveCheck] = useState<string>('grammar');
 
   // resubmit form state
   const [file, setFile] = useState<File | null>(null);
   const [resubmitting, setResubmitting] = useState(false);
+
+  // update51 — submit-for-review (the researcher's explicit review-then-
+  // submit checkpoint) and camera-ready upload state
+  const [submittingForReview, setSubmittingForReview] = useState(false);
+  const [cameraReadyFile, setCameraReadyFile] = useState<File | null>(null);
+  const [copyrightFile, setCopyrightFile] = useState<File | null>(null);
+  const [cameraReadySubmitting, setCameraReadySubmitting] = useState(false);
+  const [cameraReadySuccess, setCameraReadySuccess] = useState(false);
 
   // reviewer form state
   const [recommendation, setRecommendation] = useState('accept');
@@ -450,6 +649,34 @@ export default function SubmissionDetailPage() {
     }
   }
 
+  async function handleSubmitForReview() {
+    if (!id) return;
+    setSubmittingForReview(true);
+    try {
+      await api.submitForReview(id);
+      reload();
+    } catch (err) {
+      setError(err instanceof api.ApiError ? err.detail : 'Could not submit for review');
+    } finally {
+      setSubmittingForReview(false);
+    }
+  }
+
+  async function handleCameraReadySubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!cameraReadyFile || !id) return;
+    setCameraReadySubmitting(true);
+    try {
+      await api.submitCameraReady(id, cameraReadyFile, copyrightFile ?? undefined);
+      setCameraReadySuccess(true);
+      reload();
+    } catch (err) {
+      setError(err instanceof api.ApiError ? err.detail : 'Camera-ready submission failed');
+    } finally {
+      setCameraReadySubmitting(false);
+    }
+  }
+
   async function handleReviewSubmit(e: FormEvent) {
     e.preventDefault();
     if (!id) return;
@@ -483,6 +710,12 @@ export default function SubmissionDetailPage() {
               <h1 className="font-display-bold text-3xl">{submission.title}</h1>
               <StatusBadge status={submission.status} />
             </div>
+
+            {submission.previously_rejected_disclosure && (
+              <div className="mt-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <span className="font-bold">Researcher-disclosed history:</span> {submission.previously_rejected_disclosure}
+              </div>
+            )}
 
             {decision && (
               <div className="mt-6 border border-[var(--color-line)] bg-white p-6">
@@ -526,34 +759,123 @@ export default function SubmissionDetailPage() {
                 <p className="mt-3 text-sm text-[var(--color-ink)]/45">No checks have run yet.</p>
               )}
 
-              {aiReports.map((report) => {
-                if (report.check_type === 'grammar') {
-                  return <GrammarReportCard key={report.id} report={report} />;
-                }
-                if (report.check_type === 'format') {
-                  return <FormatReportCard key={report.id} report={report} />;
-                }
-                if (report.check_type === 'table_figure') {
-                  return <TableFigureReportCard key={report.id} report={report} />;
-                }
-                if (report.check_type === 'ai_text') {
-                  return <AiTextDetectionReportCard key={report.id} report={report} />;
-                }
-                if (report.check_type === 'citation') {
-                  return <CitationReportCard key={report.id} report={report} />;
-                }
-                if (report.check_type === 'logical_consistency') {
-                  return <LogicalConsistencyReportCard key={report.id} report={report} />;
-                }
-                return (
-                  <div key={report.id} className="mt-3 border-t border-[var(--color-line)] pt-3 text-sm">
-                    <span className="font-bold capitalize">{report.check_type.replace('_', ' ')}</span> — {report.status}
+              {aiReports.length > 0 && (
+                <>
+                  <div className="mt-4">
+                    <CheckStepper reports={aiReports} activeCheck={activeCheck} onSelect={setActiveCheck} />
                   </div>
-                );
-              })}
+
+                  {(() => {
+                    const report = aiReports.find((r) => r.check_type === activeCheck);
+                    if (!report) {
+                      return (
+                        <p className="mt-4 text-sm text-[var(--color-ink)]/45">
+                          This check hasn&apos;t run yet — its report will appear here once it completes.
+                        </p>
+                      );
+                    }
+                    const card = (() => {
+                      if (report.check_type === 'grammar') return <GrammarReportCard key={report.id} report={report} />;
+                      if (report.check_type === 'format') return <FormatReportCard key={report.id} report={report} />;
+                      if (report.check_type === 'table_figure') return <TableFigureReportCard key={report.id} report={report} />;
+                      if (report.check_type === 'ai_text') return <AiTextDetectionReportCard key={report.id} report={report} />;
+                      if (report.check_type === 'citation') return <CitationReportCard key={report.id} report={report} />;
+                      if (report.check_type === 'logical_consistency') return <LogicalConsistencyReportCard key={report.id} report={report} />;
+                      if (report.check_type === 'plagiarism') return <PlagiarismReportCard key={report.id} report={report} />;
+                      return (
+                        <div key={report.id} className="text-sm">
+                          <span className="font-bold capitalize">{report.check_type.replace('_', ' ')}</span> — {report.status}
+                        </div>
+                      );
+                    })();
+                    // Every ReportCard's own root div hardcodes "mt-3 border-t
+                    // pt-*" — the right look when several were stacked one
+                    // after another, but a stray leading divider line with
+                    // nothing above it now that only one renders at a time
+                    // under the stepper. [&>*] targets only that single
+                    // direct root, not anything nested inside it.
+                    return <div className="[&>*]:mt-0 [&>*]:border-t-0 [&>*]:pt-0">{card}</div>;
+                  })()}
+                </>
+              )}
             </div>
 
-            {user.role === 'researcher' && submission.status === 'revise_resubmit' && (
+            {/* update51 — the researcher's explicit review-then-submit
+                checkpoint. "ai_review_passed" means every configured hard
+                gate passed, but the paper has NOT yet been sent to
+                reviewers — that only happens once the researcher reviews
+                the results above and clicks this button themselves. */}
+            {user.role === 'researcher' && submission.status === 'ai_review_passed' && (
+              <div className="mt-6 border border-[var(--color-line)] bg-white p-6">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">Ready to Submit</h2>
+                <p className="mt-2 text-sm text-[var(--color-ink)]/60">
+                  Your paper has passed every required check above. Review the results, then submit it for human
+                  review when you&apos;re ready — this cannot be undone.
+                </p>
+                <button
+                  onClick={handleSubmitForReview}
+                  disabled={submittingForReview}
+                  className="mt-4 bg-[var(--color-accent)] px-6 py-2.5 text-sm font-extrabold uppercase tracking-wide text-white disabled:opacity-50"
+                  style={{ clipPath: 'polygon(3% 0, 100% 0, 97% 100%, 0 100%)' }}
+                >
+                  {submittingForReview ? 'Submitting…' : 'Submit for Review'}
+                </button>
+              </div>
+            )}
+
+            {user.role === 'researcher' && submission.status === 'ai_review_hard_failed' && (
+              <div className="mt-6 border border-red-200 bg-red-50 p-6">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-red-700">Cannot Be Submitted Yet</h2>
+                <p className="mt-2 text-sm text-red-700">
+                  This paper didn&apos;t pass one or more required checks above, so it can&apos;t be sent for review
+                  in its current form. Revise your paper based on the feedback and upload a new version below to
+                  try again.
+                </p>
+              </div>
+            )}
+
+            {user.role === 'researcher' && submission.status === 'accepted' && !submission.camera_ready_file_url && (
+              <form onSubmit={handleCameraReadySubmit} className="mt-6 border border-[var(--color-line)] bg-white p-6">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">Submit Camera-Ready Paper</h2>
+                <p className="mt-2 text-sm text-[var(--color-ink)]/60">
+                  Your paper has been accepted. Upload the final camera-ready version below. A signed copyright
+                  transfer form is optional.
+                </p>
+                {cameraReadySuccess && (
+                  <p className="mt-3 text-sm font-semibold text-[var(--color-accent)]">Camera-ready paper submitted.</p>
+                )}
+                <label className="mt-4 block text-sm font-medium">Camera-ready file</label>
+                <input
+                  type="file" accept=".docx,.pdf" required
+                  onChange={(e) => setCameraReadyFile(e.target.files?.[0] ?? null)}
+                  className="mt-1.5 w-full border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm"
+                />
+                <label className="mt-4 block text-sm font-medium">Signed copyright transfer (optional)</label>
+                <input
+                  type="file" accept=".docx,.pdf"
+                  onChange={(e) => setCopyrightFile(e.target.files?.[0] ?? null)}
+                  className="mt-1.5 w-full border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm"
+                />
+                <button
+                  type="submit" disabled={cameraReadySubmitting}
+                  className="mt-4 bg-[var(--color-accent)] px-6 py-2.5 text-sm font-extrabold uppercase tracking-wide text-white disabled:opacity-50"
+                  style={{ clipPath: 'polygon(3% 0, 100% 0, 97% 100%, 0 100%)' }}
+                >
+                  {cameraReadySubmitting ? 'Uploading…' : 'Submit Camera-Ready Paper'}
+                </button>
+              </form>
+            )}
+
+            {submission.camera_ready_file_url && (
+              <div className="mt-6 border border-[var(--color-line)] bg-white p-6">
+                <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">Camera-Ready Paper</h2>
+                <p className="mt-2 text-sm text-[var(--color-ink)]/60">
+                  Submitted{submission.copyright_transfer_file_url ? ' with a signed copyright transfer.' : '.'}
+                </p>
+              </div>
+            )}
+
+            {user.role === 'researcher' && (submission.status === 'revise_resubmit' || submission.status === 'ai_review_hard_failed') && (
               <form onSubmit={handleResubmit} className="mt-6 border border-[var(--color-line)] bg-white p-6">
                 <h2 className="text-sm font-bold uppercase tracking-wide text-[var(--color-ink)]/50">Resubmit</h2>
                 <input

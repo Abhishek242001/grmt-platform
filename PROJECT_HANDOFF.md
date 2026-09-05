@@ -17,16 +17,18 @@
 ## 2. Current Overall Status
 
 - **Phase 1 (Foundation, Auth, Backend, Frontend): COMPLETE.**
-- **Phase 2 (AI Models): 6 of 7 checks built and wired into the live pipeline.** Only plagiarism remains — blocked on a real prerequisite (no reference corpus exists yet), not a coding gap. (Note: earlier revisions of this doc said "8 checks" — stale carryover from an early planning draft; `CHECK_TYPES` in `app/models/conferences.py` is the authoritative source and only ever defined 7.)
-- **WebSocket live-push and the real `/resubmit` file upload fix are also DONE** — both were paused mid-project to focus on AI checks, then finished. Nothing from the original roadmap is still paused. See §9 for what's actually left.
+- **Phase 2 (AI Models): ALL 7 of 7 checks built, wired into the live pipeline, and confirmed running together end-to-end on a real submission** (grammar, format, table/figure, AI-generated-text, citation, logical consistency, plagiarism). Plagiarism (the last one) uses TF-IDF self-submission comparison (free, always runs) plus an optional external literature comparison via the Winston AI API (abstract-only, credit-conserving) — see §4.2 for the full design.
+- **WebSocket live-push and the real `/resubmit` file upload fix are also DONE.**
+- **A full admin panel is DONE**: encrypted external-API-key management (Winston AI), real-time hardware monitoring (CPU/memory/GPU/disk via a dedicated WebSocket channel), per-request usage logging, and a dedicated admin-only login path (`/admin`, completely separate session mechanism from the researcher/organizer/reviewer login — see §11).
+- **A major submission-workflow overhaul is DONE (see §11 for full detail)**: per-submission reviewer assignment (not just conference-pool membership), a researcher-driven "review your AI results, then explicitly submit" checkpoint before a paper reaches human review (a hard AI-gate failure now genuinely blocks submission, not just gets recorded), camera-ready paper submission after acceptance (with optional copyright transfer, and the camera-ready file is properly viewable — it's stored as a real new document version, not an orphaned path), and manual researcher self-disclosure of prior rejection at another conference.
 
-Backend test suite: **261/261 passing** as of the last verified state. Frontend has a genuine working reviewer PDF viewer with annotations (§4.1), a genuine working AI-generated-content detection card with highlighted flagged paragraphs (§4.3), and citation/logical-consistency report cards (§4.4/§4.5) — all verified with real headless-browser runs against a real running instance, not just build checks.
+Backend test suite: **378/378 passing** as of the last verified state (real pytest run on a live Studio instance, not just sandbox — see §8 for why that distinction matters here).
 
-**⚠️ The AI-generated-text detection check (§4.3) has a long, important saga — READ IT BEFORE TOUCHING THIS CHECK AGAIN.** Four different approaches were tried. Three failed with real, replicated negative results (not bugs — the actual detection signal wasn't there). The fourth (a pretrained academic-domain classifier, `followsci/bert-ai-text-detector`) is what's actually wired in now, and it is NOT highly accurate — it's a reasonable-effort starting point with known real weaknesses (misses adversarially-styled or closely-paraphrased AI text). §4.3 has the full decision record, every real number from every real test, and what a proper fix (fine-tuning on real academic-domain datasets) would need. Don't re-attempt Binoculars or Fast-DetectGPT at small model scale — that's already been tried twice and failed consistently.
+**⚠️ The AI-generated-text detection check (§4.3) has a long, important saga — READ IT BEFORE TOUCHING THIS CHECK AGAIN.** Four different approaches were tried. Three failed with real, replicated negative results (not bugs — the actual detection signal wasn't there). The fourth (a pretrained academic-domain classifier, `followsci/bert-ai-text-detector`) is what's actually wired in now, and it is NOT highly accurate — it's a reasonable-effort starting point with known real weaknesses (misses adversarially-styled or closely-paraphrased AI text). Don't re-attempt Binoculars or Fast-DetectGPT at small model scale — that's already been tried twice and failed consistently.
 
-**⚠️ Citation completeness (§4.4) and logical consistency (§4.5) are built and unit-tested, but GROBID and Ollama were never actually run** — no access to either service in the environment they were built in. Both need a real verification pass on an actual Studio (§7.3b/§7.3c) before being fully trusted, the same "written but unverified" category every GPU/external-service check this session started in.
+**✅ Citation completeness (§4.4) and logical consistency (§4.5) are now CONFIRMED RUN FOR REAL** — GROBID and Ollama+qwen2.5:7b-instruct were both eventually run on a live Studio and verified correct against real submissions. The old warning that they were "never actually run" no longer applies.
 
-**§9 is the section to read if resuming this project — it has the real, current "what's left" list, not the stale one that used to be here.**
+**§11 is the section to read for the admin panel, plagiarism/Winston AI, and the workflow-overhaul detail. §9 has the real, current "what's left" list.**
 
 ---
 
@@ -137,11 +139,15 @@ Frontend (`react-pdf`, wraps pdf.js): page navigation, click-to-annotate (review
 - Log in as a *different* user (the paper's own researcher, not the annotation's reviewer-author) and confirm: the pin and comment are visible, the "click to annotate" affordance is correctly hidden (not a reviewer), and the Delete button is correctly hidden (not the annotation's author)
 - Confirmed the only console errors present were pre-existing and unrelated (`/images/logo.jpg` missing asset, `/decision` 404 for a submission with no decision yet — both predate this work)
 
-### 4.2 What's NOT built (1 of 7 checks remains)
+### 4.2 Plagiarism/similarity check — DONE (all 7 checks now built)
 
-| Check | Model/Tool needed | Blocker |
-|---|---|---|
-| **Plagiarism/similarity** | BGE-M3 + FAISS | Needs a reference corpus of papers to compare against — doesn't exist yet, real prerequisite, not a shortcut-able gap |
+The original plan (BGE-M3 + FAISS against a self-hosted reference corpus) was abandoned — no such corpus exists or was ever going to be practical to build/maintain. Real, shipped design instead:
+
+- **Self-submission comparison** (`backend/app/ai/plagiarism_scoring.py`, `plagiarism_check.py`) — TF-IDF + cosine similarity against every other submission already on the platform. Free, always runs, no external dependency. Real calibration: verbatim copy → 1.0 similarity, lightly-edited copy → 0.55, unrelated papers → 0.06 — the 0.35 flag threshold sits cleanly in that gap.
+- **External literature comparison** (`backend/app/ai/winston_plagiarism_client.py`) — an optional, real third-party API call to **Winston AI** (`dev.gowinston.ai`), used only for its plagiarism endpoint (never its AI-text or image-detection endpoints — those are separate, unused). Requires an admin-configured, encrypted API key (see §11.1) to be active; if none is configured, this half of the check cleanly reports "not run," not an error.
+  - **Abstract-only by design, not a bug**: `EXTERNAL_SCAN_FULL_DOCUMENT = False` in `plagiarism_check.py` is the documented lift-point. A full-document scan at Winston's real pricing (2 credits/word) would exhaust the whole free credit budget on a single paper (a real 4,681-word test paper would cost 9,362 credits against a 2,000-credit free tier). Scanning only the abstract (~228 words) costs ~456 credits, leaving real budget for many more test runs.
+  - **`canAccess` per source, surfaced end-to-end**: Winston can list a source it found as a real candidate match (by title/metadata) while still scoring it 0% because it couldn't actually fetch that source's full text to compare (paywalled academic publishers like IEEE Xplore/ResearchGate are the common real case). Without surfacing this, a 0% match against what's obviously the paper's own published version looks like a false negative. The report card now shows an explicit note distinguishing "genuinely compared and found dissimilar" from "couldn't be checked at all."
+- Registered in `CHECK_EVALUATORS` as `"plagiarism"`, in `NEVER_HARD_GATE` alongside `ai_text`/`logical_consistency` (an automated similarity score is informational for reviewers, never grounds for auto-rejection).
 
 ### 4.3 AI-generated-text detection — DONE, but read the full saga before touching this again
 
@@ -314,9 +320,13 @@ While wiring logical_consistency into the gate system, found a comment in `model
 
 - **`.docx` column count isn't measured** — returns `None`, documented limitation, would need raw `<w:cols>` XML digging (not yet attempted).
 - **`.docx` page count isn't knowable without rendering** — same reason page-limit check is PDF-only.
-- **Reviewer-facing frontend pages were built early and haven't been re-verified** with the same real-build/real-test rigor later work received.
-- **GROBID (citation completeness) was never actually run** — fully built and unit-tested with mocked external calls, but genuinely unverified end-to-end. See §7.3b for setup and the manual verification steps to run before trusting this on real submissions. (Ollama/logical-consistency was verified for real in update35 — see §4.5.)
-- **Plagiarism/similarity check** — the one remaining unbuild check (§4.2). Blocked on a real prerequisite (no reference corpus of papers exists yet), not a coding gap — needs that decided/provided before this can start meaningfully.
+- **GPTZero was never wired in** — confirmed its API requires a paid plan (its free tier is web-app-only, no API access at all); Winston AI was chosen instead specifically because of its no-card-required free tier. Would need a client module built matching `winston_plagiarism_client.py`'s pattern if ever pursued.
+- **AI-based image detection (Winston has an endpoint for this) was never wired in** — deliberately deferred, noted as future scope, not started.
+- **Fine-tuning a custom AI-text-detection model on real academic-domain data** — the notebook for this was reviewed and confirmed sound, but never actually executed (needs real GPU time; the notebook's own time estimate assumed an A100, and Studio's T4 will be meaningfully slower).
+- **External plagiarism scanning is abstract-only by design** (§4.2) — a real, deliberate scope limit for credit conservation, not a bug. `EXTERNAL_SCAN_FULL_DOCUMENT` in `plagiarism_check.py` is the documented lift-point if ever revisited.
+- **Cross-conference "previously rejected" tracking is manual self-disclosure only** (§11.4) — the researcher is asked to voluntarily state it at submission time. There is no automatic same-paper detection across different conferences (that would need cross-conference similarity matching, a materially bigger and riskier build with real false-positive exposure) — this was a deliberate simplification, not an oversight.
+- **Per-submission reviewer assignment (§11.2) is not status-gated at the backend** — the organizer *can* technically assign a reviewer to a paper that hasn't yet passed the researcher's submit-for-review checkpoint, even though the intended flow is assign-after-submission. The frontend queue UI only shows the assignment control once a paper is past that point (a UI nudge), but nothing stops a direct API call from assigning earlier. Deliberately left this way rather than risk cascading test breakage from a broader backend constraint that wasn't fully traceable in the time available — worth tightening later if it matters in practice.
+- **Reviewer-facing frontend pages were built early and haven't been comprehensively re-verified** with the same real-build/real-test rigor later work received, beyond what the workflow-overhaul testing (§11) incidentally covered.
 
 ---
 
@@ -376,34 +386,34 @@ print('done')
 **Other models downloaded during development (not used in production, but likely still cached on this Studio from testing — harmless to leave, or safe to delete from `~/.cache/huggingface` to reclaim space if needed):** `Qwen/Qwen2.5-0.5B`, `Qwen/Qwen2.5-0.5B-Instruct` (Binoculars attempt, rejected), `Qwen/Qwen2.5-3B` (Fast-DetectGPT attempt, rejected), `TrustSafeAI/RADAR-Vicuna-7B` (RADAR attempt, rejected for bias against formal writing), `microsoft/phi-1_5` (earliest model choice, superseded before a check was ever built against it).
 
 ### 7.3 LanguageTool (grammar check dependency)
+**No Docker** — the project owner does not want Docker for these external services; this runs the real distributed jar directly. Assumes `~/LanguageTool-6.6` already exists (downloaded once, unpacked); this only starts it.
 ```bash
-docker start languagetool 2>/dev/null || docker run -d -p 8010:8010 --name languagetool erikvl87/languagetool
+cd ~/LanguageTool-6.6
+nohup java -cp languagetool-server.jar org.languagetool.server.HTTPServer --port 8010 --allow-origin "*" > ~/languagetool.log 2>&1 &
 sleep 15
 curl -s http://localhost:8010/v2/check -d "text=test&language=en-US" | head -c 100
 ```
+**Confirmed working, repeatedly** — this does NOT survive a Studio restart or a fresh instance; run this block again any time grammar checks start failing with "LanguageTool request failed for all chunks."
 
 ### 7.3b GROBID (citation completeness check dependency)
-Same Docker pattern as LanguageTool — a self-hosted service on port 8070. Not yet run/verified on any real Studio as of this writing; the citation check's own logic is fully unit-tested (see §4.1's citation completeness section), but the actual GROBID service integration needs a real run to confirm.
+**No Docker here either** — runs via Gradle directly. Assumes `~/grobid-0.8.1` already exists. **✅ Confirmed run for real and verified correct against a live submission** — the old "never actually run" warning no longer applies.
 ```bash
-docker start grobid 2>/dev/null || docker run -d -p 8070:8070 --name grobid grobid/grobid:0.8.1
-sleep 30  # GROBID's own startup is slower than LanguageTool's — it loads several CRF/DL models on boot
+cd ~/grobid-0.8.1
+nohup ./gradlew run --no-daemon > ~/grobid.log 2>&1 &
+sleep 30  # loads 11 Wapiti models on boot — genuinely takes this long, don't cut it short
 curl -s http://localhost:8070/api/isalive
 ```
-Should return `true`. If `GROBID_URL` needs to point somewhere other than `http://localhost:8070` (citation_check.py's default), set it as an environment variable before starting the backend: `export GROBID_URL=http://your-host:8070`.
+Should return `true`. Same restart-survival caveat as LanguageTool.
 
 ### 7.3c Ollama + Qwen2.5-7B-Instruct (logical consistency check dependency)
-The first check needing a real LLM for judgment (not just extraction). Not yet run/verified on any real Studio as of this writing — same disclosure as every GPU-dependent check built this session (see §4.3's Binoculars/Fast-DetectGPT saga for why this matters): the orchestration and prompt are structurally sound but genuinely unverified until run for real.
+**✅ Confirmed run for real and verified correct** (a deliberately obvious 95%-vs-80% inconsistency test case correctly flagged as inconsistent) — the old "never actually run" warning no longer applies. On a genuinely fresh instance, Ollama itself needs a full reinstall (it's not preinstalled) — it sets itself up as a systemd-managed service that then auto-starts, so `ollama serve &` manually is usually unnecessary after this:
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
-ollama serve &
-sleep 5
+sleep 3
 ollama pull qwen2.5:7b-instruct
-```
-The model pull is a real, substantial download (~4-5GB depending on quantization) — expect this to take a few minutes depending on connection speed. Confirm it's working:
-```bash
 curl -s http://localhost:11434/api/tags | grep qwen2.5
 ```
-If `OLLAMA_URL` needs to point somewhere other than `http://localhost:11434` (logical_consistency_check.py's default), set it as an environment variable: `export OLLAMA_URL=http://your-host:11434`.
+The model pull is a real, substantial download (~4.7GB) — expect a few minutes depending on connection speed.
 
 **Manual verification worth running before trusting this check on real submissions** (mirrors the `run_manual_verification()` pattern used for the AI-text-detection checks — same file location convention):
 ```bash
@@ -456,7 +466,46 @@ URL is `https://3000-<that-suffix>.cloudspaces.litng.ai`
 cd ~/grmt-platform/backend
 python3 -m pytest -v 2>&1 | tail -20
 ```
-Should show whatever passed count matches your last pushed commit on `dev` — apply any not-yet-pushed `updateN.zip` packages you've received on top (check with `git log --oneline -5` and compare against what's been discussed), then re-run to confirm **261 passed** (as of `update34` — citation completeness + logical consistency, the last two checks built).
+Should show whatever passed count matches your last pushed commit on `dev` — apply any not-yet-pushed `updateN.zip` packages you've received on top (check with `git log --oneline -5` and compare against what's been discussed), then re-run to confirm **378 passed** (as of the workflow-overhaul updates — §11).
+
+### 7.8 One-command bootstrap: `setup.sh`
+A single script (`~/grmt-platform/setup.sh`) now exists that does everything in §7.2–7.7 in one pass: installs backend/frontend deps, seeds the admin account, starts LanguageTool/GROBID/Ollama, starts both servers, applies any pending SQLite column migrations (see §7.9, safe/idempotent), runs health checks on all 4 services, and runs the full test suite. Run it with:
+```bash
+bash ~/grmt-platform/setup.sh
+```
+It assumes `~/LanguageTool-6.6` and `~/grobid-0.8.1` already exist (only starts them, doesn't install/download them) — same assumption as §7.3/§7.3b. **The Winston AI key is never restored by this script** — it lives in the database, and a fresh instance has a fresh, empty database; re-enter it manually in `/admin-dashboard` after setup finishes.
+
+### 7.9 A real, recurring gotcha: schema changes need a manual migration, not just a restart
+`Base.metadata.create_all()` (run automatically in dev mode on every backend startup) only creates tables that don't exist yet — it **never** adds new columns to a table that already exists. Any time a model gains a new column (e.g., the camera-ready/disclosure fields added in the workflow overhaul, §11.4), an existing `grmt_dev.db` from before that change will be missing those columns entirely, and the first write to that table will fail with `sqlite3.OperationalError: table X has no column named Y`. Fix (safe, additive, no data loss — confirmed working):
+```bash
+cd ~/grmt-platform/backend
+python3 -c "
+import sqlite3
+conn = sqlite3.connect('grmt_dev.db')
+cur = conn.cursor()
+existing = [row[1] for row in cur.execute('PRAGMA table_info(submissions)').fetchall()]
+to_add = [
+    ('previously_rejected_disclosure', 'TEXT'),
+    ('camera_ready_file_url', 'TEXT'),
+    ('copyright_transfer_file_url', 'TEXT'),
+    ('camera_ready_uploaded_at', 'DATETIME'),
+]
+for name, col_type in to_add:
+    if name not in existing:
+        cur.execute(f'ALTER TABLE submissions ADD COLUMN {name} {col_type}')
+        print(f'[ok] added column: {name}')
+conn.commit()
+conn.close()
+"
+```
+`setup.sh` (§7.8) already runs this automatically. If a *future* model gains new columns, extend the `to_add` list the same way — don't assume a fresh `create_all()` will handle it.
+
+### 7.10 Resetting test data without losing accounts
+`~/grmt-platform/backend/app/scripts/reset_test_data.py` clears every conference/submission/review/decision/reviewer-assignment/gate-rule/annotation/usage-log (plus the uploaded files on disk) while **preserving all user accounts and the stored Winston API key**. Useful for a genuinely clean end-to-end test pass without re-creating logins:
+```bash
+cd ~/grmt-platform/backend
+python -m app.scripts.reset_test_data
+```
 
 ---
 
@@ -464,7 +513,9 @@ Should show whatever passed count matches your last pushed commit on `dev` — a
 
 This is the pattern used throughout Phase 2 — worth continuing, since it verifies every change (real build/test) *before* it ever reaches the Studio, rather than trusting terminal-paste transcription.
 
-1. Claude builds and verifies changes in its own sandbox (`python3 -m pytest`, `npm run build`) — never ships unverified code
+**Important, real caveat found later in the project**: Claude's sandbox does NOT reliably have network access to `pip install` backend dependencies or run a live FastAPI TestClient — this varies by session, and some sessions (e.g., the workflow-overhaul work in §11) could only syntax-check Python changes (`ast.parse`) and reason carefully through the logic, without actually executing pytest before shipping the zip. When this is the case, say so explicitly rather than implying "verified" — the real verification happens when you run pytest on the Studio, and it's genuinely possible (and did happen at least once) for a change to look correct on inspection but fail for a reason only a live run surfaces (e.g., an existing test's setup helper making an assumption the new code broke). Frontend TypeScript type-checking (`tsc --noEmit`) has been reliably runnable in-sandbox throughout.
+
+1. Claude builds changes in its own sandbox — verifies with a real pytest/build run when network access allows, or with careful syntax-checking + reasoning when it doesn't (see caveat above) — never ships code it hasn't at least read through carefully
 2. Claude packages only the new/changed files into a zip (e.g., `update14.zip`)
 3. You run, from the **repo root** (`~/grmt-platform`, not a subdirectory):
    ```bash
@@ -492,23 +543,18 @@ This is the pattern used throughout Phase 2 — worth continuing, since it verif
 
 ## 9. What's Actually Left — Read This First If Resuming
 
-Everything from the original roadmap (§9's old ordering, kept below for archaeology) is done except one item. Current real status:
+All 7 AI checks, the admin panel, and the workflow overhaul (§11) are built and passing 378/378 tests. Nothing on the original roadmap is still open. Real remaining items, roughly in likely priority order:
 
-1. ~~Table/figure consistency check~~ — **DONE**
-2. ~~Word-to-PDF conversion pipeline~~ — **DONE**
-3. ~~Reviewer PDF viewer & annotations~~ — **DONE**
-4. ~~WebSocket live-push~~ — **DONE** (§4.1 has the details — real per-submission channel, not just the organizer queue channel)
-5. ~~`/resubmit` real file uploads~~ — **DONE**
-6. ~~AI-generated-text detection~~ — **DONE**, see §4.3's full saga (four attempts, three failures, the one that shipped)
-7. ~~Citation completeness~~ — **DONE**, see §4.4 — built and tested, but GROBID itself was never actually run (§7.3b)
-8. ~~Logical consistency~~ — **DONE AND VERIFIED END-TO-END (update35)**, see §4.5 — real Ollama + qwen2.5:7b-instruct run, positive case + negative control both correct
+1. **Reviewer-assignment picker UI exists, but isn't backend-status-gated** (§6, §11.2) — organizer can technically assign before the researcher has submitted for review via a direct API call, even though the frontend queue only shows the control after that point. Worth tightening if it matters in practice.
+2. **GPTZero was never wired in** (§6) — needs a paid plan; not pursued since Winston AI's free tier covered plagiarism detection.
+3. **AI-based image detection** (Winston has an endpoint for this) — deliberately deferred, not started.
+4. **Fine-tuning a custom AI-text-detection model** on real academic-domain data — notebook reviewed and sound, never executed (needs real GPU time).
+5. **Automatic cross-conference "previously rejected" detection** — currently manual self-disclosure only (§11.4); an automatic version would need cross-conference similarity matching, a materially bigger, riskier build.
+6. **Homepage marketing copy** (`frontend/app/page.tsx`) still describes outdated tech (older model/library names from early planning) — deliberately deferred for demo purposes, cosmetic only.
+7. **Reviewer-facing frontend hasn't been comprehensively re-verified** with the same rigor later work received, beyond what workflow-overhaul testing incidentally covered.
+8. **Git push status**: confirm exactly which `updateN.zip` packages have actually been committed and pushed to `dev` (`git log --oneline` vs. what's been discussed) before merging to `main` — this handoff doc being current doesn't guarantee every change has been pushed yet.
 
-**The only thing left to build: plagiarism/similarity detection (BGE-M3 + FAISS).** Genuinely blocked, not just unstarted — it needs a reference corpus of papers to compare submissions against, and that corpus doesn't exist. This isn't a "go build it" task the way every other check was; it's a "go decide what the corpus should be and get it" task first. Worth raising directly with whoever owns this project rather than guessing at a source.
-
-**One real verification task left, not code**:
-- Run GROBID for real (§7.3b) and confirm citation completeness catches a genuine broken citation on a real paper — Ollama/logical-consistency's equivalent task is now done (update35).
-
-Beyond that, this project has no other open threads. Everything else — Phase 1, the PDF pipeline, WebSocket, resubmit, and 6 of 7 AI checks — is built, tested, and (as far as `git log` on `dev` reflects what's actually been pushed) deployed.
+Beyond this list, there are no other open threads — every check, the PDF pipeline, WebSocket, resubmit, the admin panel, and the workflow overhaul are built, tested, and (contingent on item 8 above) should be deployed.
 
 ### Original ordering (superseded, kept for historical context only)
 
@@ -531,7 +577,46 @@ This was the original "easiest to build next" ordering, before the project owner
 
 ---
 
-## 10. Reference: Full File Inventory (Phase 2 AI code)
+## 10. Admin Panel, Plagiarism/Winston AI Integration, and the Workflow Overhaul
+
+### 10.1 Admin panel
+Fully separate, dedicated admin identity end to end — not just a role flag on a regular account.
+
+- **Backend**: `app/models/admin.py` (`ApiProviderConfig` — Fernet-encrypted API key + active flag; `ApiUsageLog` — per-request tracking), `app/core/key_encryption.py`, `app/core/system_metrics.py` (15 real psutil+nvidia-smi hardware metrics — GPU fields are `null`, not `0`, when no GPU present), `app/routers/admin.py` (all endpoints gated `require_role("platform_admin")`).
+- **Dedicated admin login, not just a role check on the shared login**: `POST /api/auth/admin-login` uses a plain **username** (not `EmailStr`) — the admin identifier (`Admin@GRMT`) was never a syntactically valid email (no TLD), and reusing the shared `/api/auth/login`'s `EmailStr`-validated schema would reject it on both the request AND the response side. Refuses to authenticate any non-`platform_admin` account, correct password or not, with the same generic "Invalid credentials" either way (no user-enumeration signal).
+- **Frontend session isolation, fixing a real reported bug**: logging in as a researcher in one browser tab and admin in another tab (same browser) used to silently disconnect one of them, because both wrote to the same `localStorage` keys. Fixed with a fully separate `admin-auth-context.tsx` using `sessionStorage` (tab-scoped, not shared across tabs the way `localStorage` is) and distinct key names — every admin API call and the admin WebSocket ticket fetch now take an explicit token parameter rather than relying on automatic lookup.
+- Real-time hardware metrics stream over a dedicated WebSocket channel (`admin:system-metrics`), gated by a pre-existing but previously-unused authorization hook in `ws.py`.
+
+### 10.2 Per-submission reviewer assignment
+Real, confirmed gap this closed: before this, `ConferenceReviewer` (a user is in a conference's general reviewer pool) was the ONLY check — meaning any pool member could view and review ANY submission in that conference, not just ones actually assigned to them.
+
+- New model: `SubmissionReviewerAssignment` (`app/models/submissions.py`) — links one specific paper to one specific reviewer, tracks who assigned them.
+- `reviews.py`'s `_require_assigned_reviewer` and `submissions.py`'s visibility check now require BOTH pool membership AND a specific assignment.
+- New endpoints: `POST/GET/DELETE .../assign-reviewer` (organizer/co-admin only); `GET /submissions/assigned` (a reviewer's own queue) now genuinely reflects only their real assignments.
+- Frontend: an assignment picker on the organizer's submission queue page — see the known gap in §6/§9 about this not being backend-status-gated.
+
+### 10.3 The researcher review-then-submit gate (the core workflow fix)
+Real, confirmed gap: AI checks completing used to auto-advance a submission straight to `in_human_review` with zero researcher-facing checkpoint, and a hard-gate failure (`ai_review_hard_failed`) was recorded but never actually blocked anything downstream.
+
+- `gate_engine.py`'s `evaluate_submission_gates` now stops at a new terminal state, `ai_review_passed`, instead of `in_human_review`, when nothing hard-fails.
+- New endpoint `POST /submissions/{id}/submit-for-review` — researcher-only, owner-only, only succeeds from `ai_review_passed`. A hard-gate failure can never reach this successfully; the researcher must revise (upload a new version) and try again.
+- **Also found and fixed a directly-related bug while building this**: `/resubmit` only accepted uploads when status was `revise_resubmit` — meaning a submission stuck at `ai_review_hard_failed` had NO path to resubmit at all. Now accepts both statuses.
+- Frontend: replaced the old "all 7 checks stacked vertically" display with a horizontal step-wizard (green check per completed check, amber for error) — any step directly clickable, not strictly linear, since this page is shared by researchers/reviewers/organizers who each have real reasons to jump to one specific check. A "Submit for Review" button appears at `ai_review_passed`; a clear blocking message (not a dead end) appears at `ai_review_hard_failed`, with the resubmit form available right there.
+
+### 10.4 Camera-ready submission + cross-conference disclosure
+- New `Submission` fields: `camera_ready_file_url`, `copyright_transfer_file_url` (genuinely optional), `camera_ready_uploaded_at`, `previously_rejected_disclosure`.
+- `POST /submissions/{id}/camera-ready` — only reachable once `Decision.decision == "accept"`.
+- **Real, confirmed viewer bug found and fixed after initial ship**: the first version of this endpoint just set a bare file path on `Submission`, with no way for the main PDF viewer (which always shows the latest `SubmissionVersion`) to ever display it — an organizer accepting a paper and receiving its camera-ready version would still see the original draft with no way to view the real final one. Fixed by making camera-ready upload create a REAL new `SubmissionVersion` (same mechanism as `/resubmit`), so it naturally becomes "the latest version" and the existing viewer picks it up with zero frontend changes. Deliberately does NOT re-run the 7 AI checks (no reason to re-grade a post-acceptance paper) but does still run Word→PDF conversion so a `.docx` camera-ready file is viewable.
+- `previously_rejected_disclosure` is a manual, optional free-text field the researcher fills in at submission time — shown to reviewers/organizers on the submission detail page. See §6/§9 for why this is manual rather than automatic.
+
+### 10.5 Operational tooling added alongside this work
+- `app/scripts/reset_test_data.py` — clears all conferences/submissions/reviews/decisions/assignments/gate-rules/annotations/usage-logs (+ uploaded files on disk) while preserving user accounts and the stored Winston key. See §7.10.
+- `~/grmt-platform/setup.sh` — one-command full environment bootstrap. See §7.8.
+- The SQLite manual-migration gotcha (§7.9) was discovered and documented during this work — a schema change (the camera-ready/disclosure columns above) on an existing database needs an explicit `ALTER TABLE`, since dev-mode `create_all()` never adds columns to a table that already exists.
+
+---
+
+## 11. Reference: Full File Inventory (Phase 2 AI code)
 
 ```
 backend/app/ai/
@@ -567,10 +652,23 @@ backend/app/core/gate_engine.py  # CHECK_EVALUATORS registry (grammar, format, t
 
 backend/app/models/conferences.py  # NEVER_HARD_GATE = {"plagiarism", "ai_text", "logical_consistency"} — DB-enforced (ck_gate_rule_never_hard_gate) AND API-enforced (schemas/conferences.py's GateRuleIn.validate_never_hard_gate)
 
+backend/app/ai/plagiarism_scoring.py        # ★ TF-IDF + cosine similarity, self-submission comparison
+backend/app/ai/plagiarism_check.py          # ★ orchestrator — self-submission (always) + external via injectable external_check_fn, abstract-only scoping (EXTERNAL_SCAN_FULL_DOCUMENT)
+backend/app/ai/winston_plagiarism_client.py # ★ real Winston AI API client, built against their published OpenAPI schema, canAccess surfaced per source
+backend/app/ai/ai_text_highlighting.py      # ★ PyMuPDF search_for()-based PDF highlighting for flagged AI-text sentences
+
+backend/app/models/admin.py           # ApiProviderConfig (encrypted key + active flag), ApiUsageLog
+backend/app/core/key_encryption.py    # Fernet encryption for stored provider API keys
+backend/app/core/system_metrics.py    # 15 real psutil+nvidia-smi hardware metrics
+backend/app/routers/admin.py          # api-keys GET/PUT/activate, api-usage — all require_role("platform_admin")
+backend/app/scripts/seed_admin.py     # idempotent admin seed, --username primary flag (--email kept as alias)
+backend/app/scripts/reset_test_data.py # clears all test data, preserves users + api_provider_configs
+
 backend/app/routers/
-├── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks, upload + resubmit endpoints (6 checks per upload now)
+├── submissions.py             # _run_ai_checks_and_store() + _convert_to_pdf_and_store() background tasks; upload/resubmit/submit-for-review/camera-ready endpoints; all 7 checks per upload now
+├── reviews.py                 # review/decision endpoints + per-submission reviewer assign/list/unassign (SubmissionReviewerAssignment)
 ├── files.py                   # pdf-url (issues signed URL) + pdf-stream (actually serves bytes, signature-only auth) + annotation CRUD
-├── ws.py                      # submission:{id}:updates channel (researcher/reviewer/organizer scoped) + conference:{id}:queue (organizer/co-admin only)
+├── ws.py                      # submission:{id}:updates + conference:{id}:queue + admin:system-metrics channels
 └── conferences.py             # gate-rules endpoints
 
 backend/tests/
@@ -579,10 +677,10 @@ backend/tests/
 ├── test_format_compliance_check.py
 ├── test_table_figure_check.py
 ├── test_docx_utils.py
-├── test_gate_engine.py        # includes ai_text's inverted-comparison + citation/logical_consistency evaluators + NEVER_HARD_GATE tests
+├── test_gate_engine.py        # includes ai_text's inverted-comparison + citation/logical_consistency/plagiarism evaluators + NEVER_HARD_GATE tests + ai_review_passed transition
 ├── test_word_to_pdf.py        # real soffice conversion, no mocking
 ├── test_files.py              # real signed-URL streaming: fetchable, tamper-rejected, expiry-rejected, real annotation CRUD
-├── test_ws.py                 # includes submission:{id}:updates channel authorization (owner/reviewer/organizer/denied cases) + real live-push confirmation
+├── test_ws.py                 # includes submission:{id}:updates channel authorization + real live-push confirmation
 ├── test_binoculars_scoring.py # pure math tests for the rejected Binoculars approach
 ├── test_fast_detect_gpt_scoring.py # pure math tests for the rejected Fast-DetectGPT approach
 ├── test_radar_check.py        # mocked orchestration tests for the rejected RADAR approach
@@ -590,16 +688,26 @@ backend/tests/
 ├── test_text_chunking.py      # word-count bucketing, hand-verified
 ├── test_ai_content_pipeline.py # word-weighted aggregation, hand-verified boundary cases, mocked end-to-end orchestration
 ├── test_citation_extraction.py  # pure TEI-XML parsing, hand-built realistic GROBID-shaped fixtures
-├── test_citation_check.py       # mocked GROBID orchestration
+├── test_citation_check.py       # mocked GROBID orchestration; confirmed against real GROBID separately
 ├── test_logical_consistency_scoring.py  # JSON validation + section extraction, hand-verified
-├── test_logical_consistency_check.py    # mocked Ollama orchestration
+├── test_logical_consistency_check.py    # mocked Ollama orchestration; confirmed against real Ollama separately
+├── test_winston_plagiarism_client.py    # real Winston schema-shaped fixtures, canAccess coverage
+├── test_reviewer_assignment.py          # per-submission assignment mechanism — the real gap it closes
+├── test_submit_for_review.py            # the researcher review-then-submit gate + hard-fail blocking
+├── test_camera_ready.py                 # camera-ready upload, acceptance-gating, real version creation
 ├── test_conferences.py        # includes NEVER_HARD_GATE tests for all 3 excluded check_types + confirms citation CAN hard-gate
-└── test_submissions.py        # includes integration tests for all 6 live checks + PDF conversion + resubmit re-running checks
+└── test_submissions.py        # includes integration tests for all 7 live checks + PDF conversion + resubmit re-running checks
 
-frontend/app/submissions/[id]/page.tsx  # GrammarReportCard + FormatReportCard + TableFigureReportCard + AiTextDetectionReportCard + CitationReportCard + LogicalConsistencyReportCard + PdfAnnotationViewer + WebSocket live-push wiring
+frontend/app/submissions/[id]/page.tsx  # CheckStepper (horizontal step-wizard, replaces old stacked layout) + all 7 ReportCards + PlagiarismReportCard (canAccess-aware) + submit-for-review + camera-ready UI + PdfAnnotationViewer + WebSocket live-push wiring
+frontend/app/conferences/[id]/queue/page.tsx  # per-submission reviewer assignment picker
 frontend/components/PdfAnnotationViewer.tsx  # react-pdf-based viewer, click-to-annotate (reviewer-gated), percentage-positioned pins
-frontend/lib/api.ts                     # All check result types (Grammar/Format/TableFigure/AiTextDetection/Citation/LogicalConsistency) + Annotation/SignedUrl types + resubmit() now takes a real File
+frontend/lib/api.ts                     # all check result types incl. Plagiarism (self + external + canAccess) + ReviewerAssignment + submitForReview/submitCameraReady + admin functions taking explicit tokens
+frontend/lib/admin-auth-context.tsx     # ★ separate, sessionStorage-based admin session (fixes the multi-tab session-collision bug — §10.1)
+frontend/app/admin/page.tsx             # dedicated admin login (plain username, not EmailStr-validated)
+frontend/app/admin-dashboard/page.tsx   # real-time metrics + API key management (moved here from /admin)
+
+setup.sh                                # one-command full environment bootstrap — see §7.8
 ```
 
-**Explicitly NOT built for ai_text**: true highlighting drawn on top of the rendered PDF (boxes at exact page coordinates) — needs new work mapping flagged text to PDF bounding boxes (PyMuPDF's `search_for()` could do this). What exists is a highlighted-paragraph list in the AI Feedback panel instead — see §4.3's wiring section for the full explanation of this scope decision.
+**Update — ai_text PDF highlighting was later built and verified** (superseding the note that used to be here): `ai_text_highlighting.py` uses PyMuPDF's `search_for()` to draw real highlight boxes on the rendered PDF at the exact flagged sentences' page coordinates (sentence-window splitting, page-resolution matching). Verified on a real 51-page IEEE Access paper — highlights correctly rendered over the actual flagged sentences, confirmed via live screenshots. Extraction prefers `pdf_path_for_highlighting` when given, since `page_map` is only populated when extracting from a real PDF — a `.docx` submission needs the converted PDF specifically for this to work.
 

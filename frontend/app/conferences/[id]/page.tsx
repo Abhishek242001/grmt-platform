@@ -22,6 +22,7 @@ export default function ConferenceDetailPage() {
   const [conference, setConference] = useState<api.Conference | null>(null);
   const [title, setTitle] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [previouslyRejectedDisclosure, setPreviouslyRejectedDisclosure] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -51,6 +52,7 @@ export default function ConferenceDetailPage() {
         title,
         original_filename: file.name,
         original_file_url: `placeholder://uploads/${file.name}`,
+        previously_rejected_disclosure: previouslyRejectedDisclosure.trim() || undefined,
       });
       await api.uploadSubmissionFile(sub.id, file);
       setSuccess(true);
@@ -128,6 +130,19 @@ export default function ConferenceDetailPage() {
                   id="file" type="file" accept=".docx,.pdf" required
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                   className="w-full border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="previously-rejected" className="mb-1.5 block text-sm font-medium">
+                  Was this paper previously rejected at another conference? <span className="font-normal text-[var(--color-ink)]/50">(optional)</span>
+                </label>
+                <textarea
+                  id="previously-rejected" rows={3}
+                  value={previouslyRejectedDisclosure}
+                  onChange={(e) => setPreviouslyRejectedDisclosure(e.target.value)}
+                  placeholder="e.g. Rejected at ICSE 2025 — reviewers flagged insufficient evaluation on the proposed method."
+                  className="w-full border border-[var(--color-line)] bg-white px-3.5 py-2.5 text-sm focus-visible:border-[var(--color-accent)]"
                 />
               </div>
 

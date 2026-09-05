@@ -23,3 +23,6 @@ pytest-asyncio==0.24.0
 # BEFORE installing anything else — see PROJECT_HANDOFF.md §7.2c.
 transformers>=4.46.0
 accelerate>=1.0.0
+
+# Self-submission plagiarism check (TF-IDF + cosine similarity) — update43.
+scikit-learn>=1.5.0

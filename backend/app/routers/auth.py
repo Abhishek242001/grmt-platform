@@ -7,6 +7,9 @@ from app.core.deps import get_current_user
 from app.core.logging_utils import get_logger
 from app.models.core import User
 from app.schemas.auth import (
+    AdminLoginRequest,
+    AdminTokenResponse,
+    AdminUserOut,
     LoginRequest,
     RefreshRequest,
     SignupRequest,
@@ -58,6 +61,41 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     logger.info("login: user id=%s", user.id)
     return _issue_tokens(user)
+
+
+@router.post("/admin-login", response_model=AdminTokenResponse)
+def admin_login(payload: AdminLoginRequest, db: Session = Depends(get_db)):
+    """Separate from /login end to end (see schemas/auth.py's AdminLoginRequest
+    docstring for why) — the admin identifier is a username, not a real email,
+    so this never touches EmailStr validation on the way in or out.
+
+    Same not-a-user-enumeration-oracle principle as the researcher/organizer/
+    reviewer login above, extended one step further: this endpoint refuses
+    to authenticate ANY non-platform_admin account, correct password or not
+    — a researcher who happens to guess this endpoint's existence and their
+    own correct credentials still gets "Invalid credentials", not a
+    confirmation that this is in fact a real login path that just isn't for
+    them. Checked AFTER password verification (not before), so response
+    timing doesn't leak whether the failure was password or role."""
+    user = db.query(User).filter(User.email == payload.username.lower()).first()
+
+    if not user or not security.verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if user.role != "platform_admin":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been deactivated")
+
+    logger.info("admin_login: user id=%s", user.id)
+    access = security.create_access_token(subject=user.id, role=user.role)
+    refresh = security.create_refresh_token(subject=user.id)
+    return AdminTokenResponse(
+        access_token=access,
+        refresh_token=refresh,
+        user=AdminUserOut(id=user.id, username=user.email, full_name=user.full_name, role=user.role),
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)

@@ -47,3 +47,17 @@ class DecisionOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AssignReviewerIn(BaseModel):
+    reviewer_id: str
+
+
+class ReviewerAssignmentOut(BaseModel):
+    id: str
+    submission_id: str
+    reviewer_id: str
+    assigned_by: str
+
+    class Config:
+        from_attributes = True

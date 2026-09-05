@@ -33,6 +33,32 @@ class LoginRequest(BaseModel):
     password: str
 
 
+# Admin login is deliberately separate from the above, end to end — the
+# admin identifier is a plain username, not a real email address (matches
+# how it was actually requested: "Admin@GRMT", which has no valid TLD and
+# will never pass EmailStr). Reusing LoginRequest/UserOut here would also
+# break on the RESPONSE side, not just the request: UserOut.email is
+# EmailStr too, so even a successful login would fail at serialization
+# time trying to force a non-email string through it.
+class AdminLoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=255)
+    password: str
+
+
+class AdminUserOut(BaseModel):
+    id: str
+    username: str
+    full_name: str
+    role: str
+
+
+class AdminTokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: AdminUserOut
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

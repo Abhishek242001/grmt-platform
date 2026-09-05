@@ -121,6 +121,28 @@ def _logical_consistency_passes(result: dict, threshold: float | None) -> bool:
     return score >= threshold
 
 
+def _plagiarism_passes(result: dict, threshold: float | None) -> bool:
+    # score >= threshold, same direction as grammar/format/table_figure/
+    # citation/logical_consistency — plagiarism_check.py deliberately
+    # computes score as (1 - highest_similarity) * 100, so higher score
+    # already means LESS similarity/LESS concerning (100 = no overlap
+    # found), matching this file's dominant convention rather than
+    # ai_text's inverted one. Like ai_text/logical_consistency, this can
+    # never actually trigger a hard fail in practice — models/
+    # conferences.py's NEVER_HARD_GATE includes "plagiarism": an automated
+    # TF-IDF similarity score is informational for reviewers (shared
+    # domain terminology between two unrelated papers, permitted
+    # self-citation, and genuine misconduct can all produce a flagged
+    # score — a human must interpret what the similarity actually means),
+    # never grounds for auto-rejection on its own.
+    if threshold is None:
+        return True
+    score = result.get("score")
+    if score is None:
+        return True
+    return score >= threshold
+
+
 CHECK_EVALUATORS = {
     "grammar": _grammar_passes,
     "format": _format_passes,
@@ -128,19 +150,22 @@ CHECK_EVALUATORS = {
     "ai_text": _ai_text_passes,
     "citation": _citation_passes,
     "logical_consistency": _logical_consistency_passes,
-    # plagiarism
-    # register here once built — this is the one place that needs
-    # a new line added, not a rewrite of the evaluation logic itself.
+    "plagiarism": _plagiarism_passes,
 }
 
 
 def evaluate_submission_gates(submission_id: str, db: Session) -> str:
     """Evaluates only the checks that have actually COMPLETED for this
-    submission — with 6 of 7 checks currently implemented (only plagiarism
-    remains), this deliberately never returns "ai_review_passed" (that
-    would claim the full pipeline ran clean). It returns
-    "ai_review_hard_failed" if any hard-gated check failed, otherwise
-    "in_human_review" — nothing blocking found among what has run."""
+    submission. Returns "ai_review_hard_failed" if any hard-gated check
+    failed. Otherwise returns "ai_review_passed" — update51: this used to
+    return "in_human_review" directly here, silently sending every
+    submission straight to reviewers the instant checks finished, with no
+    researcher-facing checkpoint at all. Now the researcher must review
+    these results themselves and explicitly call POST .../submit-for-review
+    (see submissions.py) to advance from "ai_review_passed" into
+    "in_human_review" — and a hard-failed submission can never reach that
+    endpoint successfully, so a hard gate failure now actually blocks
+    something, rather than only being recorded."""
     sub = db.query(Submission).filter(Submission.id == submission_id).first()
     if sub is None:
         return "unknown"
@@ -174,7 +199,7 @@ def evaluate_submission_gates(submission_id: str, db: Session) -> str:
         if not passed and rule.is_hard_gate:
             hard_failed = True
 
-    new_status = "ai_review_hard_failed" if hard_failed else "in_human_review"
+    new_status = "ai_review_hard_failed" if hard_failed else "ai_review_passed"
     sub.status = new_status
     db.commit()
     return new_status

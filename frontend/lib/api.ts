@@ -44,7 +44,8 @@ async function parseErrorDetail(resp: Response): Promise<string> {
   }
 }
 
-function authHeaders(): Record<string, string> {
+function authHeaders(tokenOverride?: string): Record<string, string> {
+  if (tokenOverride) return { Authorization: `Bearer ${tokenOverride}` };
   if (typeof window === 'undefined') return {};
   const token = localStorage.getItem('grmt_access_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -52,13 +53,14 @@ function authHeaders(): Record<string, string> {
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  tokenOverride?: string
 ): Promise<T> {
   const resp = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(),
+      ...authHeaders(tokenOverride),
       ...(options.headers || {}),
     },
   });
@@ -91,6 +93,40 @@ export function login(input: {
     method: 'POST',
     body: JSON.stringify(input),
   });
+}
+
+// The backend's admin-login endpoint deliberately returns a differently-
+// shaped response (AdminUserOut: {id, username, full_name, role} — no
+// email field at all, since a real admin identifier is a plain username,
+// not a real email — see backend/app/schemas/auth.py's AdminLoginRequest
+// docstring for why). Mapped here into the same User/TokenResponse shape
+// everything else already uses, so useAuth()'s user state and every
+// existing role-gated page work identically regardless of which login
+// path was actually used — that translation belongs at this API-boundary
+// function, not spread across the app.
+interface AdminTokenResponseRaw {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  user: { id: string; username: string; full_name: string; role: Role };
+}
+
+export function adminLogin(input: { username: string; password: string }): Promise<TokenResponse> {
+  return request<AdminTokenResponseRaw>('/auth/admin-login', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }).then((raw) => ({
+    access_token: raw.access_token,
+    refresh_token: raw.refresh_token,
+    token_type: raw.token_type,
+    user: {
+      id: raw.user.id,
+      email: raw.user.username, // mapped — see comment above
+      full_name: raw.user.full_name,
+      role: raw.user.role,
+      is_email_verified: true, // admin accounts are seeded pre-verified, no real email to verify
+    },
+  }));
 }
 
 export function refreshToken(refresh_token: string): Promise<TokenResponse> {
@@ -171,6 +207,7 @@ export function updateGateRules(
 
 export interface MemberRow {
   id: string;
+  reviewer_id?: string; // present on reviewer rows specifically — the underlying user id, distinct from this row's own id
   email: string;
   full_name: string;
 }
@@ -217,6 +254,9 @@ export interface Submission {
   researcher_id: string;
   title: string;
   status: string;
+  previously_rejected_disclosure?: string | null;
+  camera_ready_file_url?: string | null;
+  copyright_transfer_file_url?: string | null;
 }
 
 export interface SubmissionVersion {
@@ -231,6 +271,7 @@ export function createSubmission(input: {
   title: string;
   original_filename: string;
   original_file_url: string;
+  previously_rejected_disclosure?: string;
 }): Promise<Submission> {
   return request<Submission>('/submissions', {
     method: 'POST',
@@ -269,8 +310,58 @@ export async function resubmit(id: string, file: File, title?: string): Promise<
   return resp.json();
 }
 
+// update51 — per-submission reviewer assignment (organizer/co-admin only).
+export interface ReviewerAssignment {
+  id: string;
+  submission_id: string;
+  reviewer_id: string;
+  assigned_by: string;
+}
+
+export function assignReviewer(submissionId: string, reviewerId: string): Promise<ReviewerAssignment> {
+  return request<ReviewerAssignment>(`/submissions/${submissionId}/assign-reviewer`, {
+    method: 'POST',
+    body: JSON.stringify({ reviewer_id: reviewerId }),
+  });
+}
+
+export function listAssignedReviewers(submissionId: string): Promise<ReviewerAssignment[]> {
+  return request<ReviewerAssignment[]>(`/submissions/${submissionId}/assigned-reviewers`);
+}
+
+export function unassignReviewer(submissionId: string, reviewerId: string): Promise<void> {
+  return request<void>(`/submissions/${submissionId}/assign-reviewer/${reviewerId}`, { method: 'DELETE' });
+}
+
 export function conferenceQueue(conferenceId: string): Promise<Submission[]> {
   return request<Submission[]>(`/conferences/${conferenceId}/submissions`);
+}
+
+// update51 — the researcher's explicit review-then-submit checkpoint.
+// Fails with a real, distinct message depending on why: still processing,
+// hard-failed a required check (must revise, not just retry), or already
+// submitted — see ApiError.detail for exactly which.
+export function submitForReview(id: string): Promise<Submission> {
+  return request<Submission>(`/submissions/${id}/submit-for-review`, { method: 'POST' });
+}
+
+export async function submitCameraReady(
+  id: string,
+  file: File,
+  copyrightTransferFile?: File
+): Promise<Submission> {
+  const form = new FormData();
+  form.append('file', file);
+  if (copyrightTransferFile) form.append('copyright_transfer_file', copyrightTransferFile);
+  const resp = await fetch(`${API_BASE_URL}/submissions/${id}/camera-ready`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!resp.ok) {
+    throw new ApiError(resp.status, await parseErrorDetail(resp));
+  }
+  return resp.json();
 }
 
 // ── AI reports ───────────────────────────────────────────────────
@@ -367,6 +458,47 @@ export interface CitationCheckResult {
   total_citations?: number;
   total_bibliography_entries?: number;
   score: number | null;
+  issues: string[];
+}
+
+export interface PlagiarismSelfMatch {
+  submission_id: string;
+  similarity: number; // 0-1
+}
+
+export interface PlagiarismExternalMatch {
+  source_url: string | null;
+  source_title: string | null;
+  similarity_pct: number;
+  plagiarized_word_count: number;
+  can_access: boolean | null; // false = Winston found this source but couldn't fetch its full text to actually compare — a 0% here means "couldn't check", not "checked and dissimilar"
+  matched_spans: Array<{ start_char: number | null; end_char: number | null; text: string | null }>;
+}
+
+export interface PlagiarismExternalResult {
+  status: string; // 'complete' | 'error'
+  error?: string;
+  error_code?: string;
+  // present when status === 'complete'
+  overall_similarity_pct?: number;
+  word_count?: number;
+  plagiarized_word_count?: number;
+  source_count?: number;
+  matches?: PlagiarismExternalMatch[];
+  credits_used?: number;
+  credits_remaining?: number;
+}
+
+export interface PlagiarismCheckResult {
+  status: string;
+  error?: string;
+  score: number | null; // 100 = no concerning overlap found (higher is better, same convention as citation/format)
+  highest_similarity?: number; // 0-1, self-submission comparison only
+  matches?: PlagiarismSelfMatch[]; // self-submission matches
+  candidates_compared?: number;
+  candidates_skipped_too_short?: number;
+  flag_threshold?: number;
+  external: PlagiarismExternalResult | null; // null = no external provider configured/active at check time
   issues: string[];
 }
 
@@ -512,6 +644,74 @@ export function deleteAnnotation(annotationId: string): Promise<void> {
 
 // ── WebSocket ────────────────────────────────────────────────────
 
-export function getWsTicket(): Promise<{ ticket: string; expires_in_seconds: number }> {
-  return request('/ws/ticket', { method: 'POST' });
+export function getWsTicket(tokenOverride?: string): Promise<{ ticket: string; expires_in_seconds: number }> {
+  return request('/ws/ticket', { method: 'POST' }, tokenOverride);
+}
+
+// ── Admin panel ──────────────────────────────────────────────────
+
+export interface ApiProviderStatus {
+  provider: 'gptzero' | 'winston';
+  is_configured: boolean;
+  is_active: boolean;
+  masked_key: string | null;
+}
+
+export interface ApiUsageSummary {
+  totals_by_provider: Record<string, { total_requests: number; successful_requests: number }>;
+  hourly_breakdown: Array<Record<string, string | number>>;
+}
+
+export interface SystemMetrics {
+  timestamp: number;
+  cpu_utilization_pct: number;
+  cpu_core_count: number;
+  cpu_per_core_pct: number[];
+  memory_used_pct: number;
+  memory_used_gb: number;
+  memory_total_gb: number;
+  swap_used_pct: number;
+  disk_used_pct: number;
+  disk_used_gb: number;
+  disk_total_gb: number;
+  disk_read_mb_s: number;
+  disk_write_mb_s: number;
+  network_sent_mb_s: number;
+  network_recv_mb_s: number;
+  load_average_1m: number;
+  load_average_5m: number;
+  load_average_15m: number;
+  process_count: number;
+  uptime_seconds: number;
+  gpu_utilization_pct: number | null;
+  gpu_memory_used_mb: number | null;
+  gpu_memory_total_mb: number | null;
+  gpu_temperature_c: number | null;
+}
+
+// update51: every admin function below takes an explicit adminToken rather
+// than relying on request()'s automatic localStorage lookup — the admin
+// panel now authenticates via its own sessionStorage-based, tab-scoped
+// token (see admin-auth-context.tsx), completely separate from the shared
+// researcher/organizer/reviewer localStorage session. Passing the token
+// explicitly here is what makes that isolation actually work end to end,
+// rather than silently falling back to whichever session happens to be in
+// localStorage — see the session-isolation bug this was built to fix.
+export function getApiProviders(adminToken: string): Promise<ApiProviderStatus[]> {
+  return request('/admin/api-keys', {}, adminToken);
+}
+
+export function setApiKey(provider: 'gptzero' | 'winston', key: string, adminToken: string): Promise<ApiProviderStatus> {
+  return request(`/admin/api-keys/${provider}`, {
+    method: 'PUT',
+    body: JSON.stringify({ key }),
+  }, adminToken);
+}
+
+export function activateApiProvider(provider: 'gptzero' | 'winston', adminToken: string): Promise<ApiProviderStatus[]> {
+  return request(`/admin/api-keys/${provider}/activate`, { method: 'POST' }, adminToken);
+}
+
+export function getApiUsage(adminToken: string): Promise<ApiUsageSummary> {
+  return request('/admin/api-usage', {}, adminToken);
 }

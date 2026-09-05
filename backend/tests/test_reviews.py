@@ -26,7 +26,17 @@ def _setup_submission_with_reviewer(client):
         },
         headers=_auth(res_token),
     )
-    return org_token, rev_token, res_token, sub_r.json()["id"]
+    sub_id = sub_r.json()["id"]
+
+    # update51 — pool membership alone is no longer sufficient; this helper
+    # now also performs the real per-paper assignment so every existing
+    # test's "rev_token is a properly assigned reviewer" premise still
+    # holds under the stricter model. See test_reviewer_assignment.py for
+    # tests targeting the assignment mechanism itself.
+    rev_id = client.get("/api/auth/me", headers=_auth(rev_token)).json()["id"]
+    client.post(f"/api/submissions/{sub_id}/assign-reviewer", json={"reviewer_id": rev_id}, headers=_auth(org_token))
+
+    return org_token, rev_token, res_token, sub_id
 
 
 def test_assigned_reviewer_can_submit_review(client):
@@ -69,6 +79,8 @@ def test_reviewer_sees_only_own_review_not_others(client):
     conf_r = client.get(f"/api/submissions/{sub_id}", headers=_auth(org_token))
     conf_id = conf_r.json()["conference_id"]
     client.post(f"/api/conferences/{conf_id}/reviewers", json={"email": "rev2@example.com"}, headers=_auth(org_token))
+    rev2_id = client.get("/api/auth/me", headers=_auth(rev2)).json()["id"]
+    client.post(f"/api/submissions/{sub_id}/assign-reviewer", json={"reviewer_id": rev2_id}, headers=_auth(org_token))
     client.post(f"/api/submissions/{sub_id}/reviews", json={"recommendation": "reject"}, headers=_auth(rev2))
 
     r = client.get(f"/api/submissions/{sub_id}/reviews", headers=_auth(rev_token))

@@ -9,9 +9,16 @@ from app.core import database as database_module
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
+from app.core.logging_utils import get_logger
 from app.models.conferences import Conference, ConferenceCoAdmin, ConferenceReviewer
 from app.models.core import User
-from app.models.submissions import AIReport, Submission, SubmissionVersion
+from app.models.submissions import (
+    AIReport,
+    Decision,
+    Submission,
+    SubmissionReviewerAssignment,
+    SubmissionVersion,
+)
 from app.schemas.submissions import (
     AIReportOut,
     ResubmitRequest,
@@ -21,6 +28,7 @@ from app.schemas.submissions import (
 )
 
 router = APIRouter(prefix="/api/submissions", tags=["submissions"])
+logger = get_logger("grmt.submissions")
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -46,7 +54,14 @@ def _get_visible_submission_or_404(submission_id: str, user: User, db: Session) 
         db.query(ConferenceReviewer)
         .filter(ConferenceReviewer.conference_id == sub.conference_id, ConferenceReviewer.reviewer_id == user.id)
         .first() is not None
+        and db.query(SubmissionReviewerAssignment)
+        .filter(SubmissionReviewerAssignment.submission_id == sub.id, SubmissionReviewerAssignment.reviewer_id == user.id)
+        .first() is not None
     )
+    # update51 — a reviewer must now be BOTH a pool member for this
+    # conference AND specifically assigned to THIS paper. Before this
+    # change, any pool member could see (and review) every submission in
+    # the conference — see SubmissionReviewerAssignment's docstring.
     if is_coadmin or is_reviewer:
         return sub
 
@@ -131,6 +146,122 @@ def _convert_to_pdf_and_store(submission_id: str, version_id: str, file_path: st
         db.close()
 
 
+def _fetch_plagiarism_candidates(db, current_submission_id: str) -> list[dict]:
+    """Fetches {"submission_id", "text"} for every OTHER submission's latest
+    version, re-extracting text on demand from each candidate's original
+    file (phase 1 of 3 — see plagiarism_scoring.py's docstring for the full
+    corpus-decision context).
+
+    Honest, real limitation, not hidden: this re-reads and re-parses every
+    OTHER submission's file on every single plagiarism check — it doesn't
+    scale indefinitely. Fine for a reasonable submission count; a genuine
+    future optimization would persist extracted text (or embeddings) once
+    per version instead of re-extracting it on every comparison. Left as a
+    documented follow-up, not solved here, since it's a real infrastructure
+    decision (where does that get stored, invalidated on resubmit, etc.),
+    not a small addition to this function.
+
+    A candidate whose file can't be read (missing, corrupt, unsupported
+    type) is silently skipped rather than failing the whole check — one
+    bad prior submission shouldn't block checking a new one."""
+    from app.ai.grammar_check import extract_text
+
+    other_submissions = db.query(Submission).filter(Submission.id != current_submission_id).all()
+
+    candidates = []
+    for sub in other_submissions:
+        latest_version = (
+            db.query(SubmissionVersion)
+            .filter(SubmissionVersion.submission_id == sub.id)
+            .order_by(SubmissionVersion.version_number.desc())
+            .first()
+        )
+        if latest_version is None:
+            continue
+        try:
+            text, _ = extract_text(latest_version.original_file_url)
+        except Exception:
+            continue
+        if text.strip():
+            candidates.append({"submission_id": sub.id, "text": text})
+
+    return candidates
+
+
+def _build_external_plagiarism_check_fn(db):
+    """Builds the callable passed as plagiarism_check.py's external_check_fn
+    (update45) — or returns None if no provider is currently active, so the
+    caller can skip external comparison entirely rather than pass a
+    guaranteed-to-no-op closure.
+
+    This is where the admin panel's stored, encrypted API key actually gets
+    used for the first time — everything built in update44 (ApiProviderConfig,
+    key_encryption.py) was infrastructure; this is the piece that spends it.
+    Also responsible for logging every real call to ApiUsageLog, success or
+    failure, which is what the admin panel's usage dashboard reads.
+
+    update49: logs every decision point explicitly — whether an active
+    provider was found at all, which one, and the real outcome of the call
+    — so a "why didn't this call anything" question can be answered by
+    reading backend.log instead of guessing."""
+    from app.core.key_encryption import decrypt_api_key
+    from app.models.admin import ApiProviderConfig, ApiUsageLog
+
+    active = db.query(ApiProviderConfig).filter(ApiProviderConfig.is_active == True).first()  # noqa: E712
+    if active is None:
+        logger.info("plagiarism external check: no ApiProviderConfig row is currently active — skipping")
+        return None
+    if active.encrypted_key is None:
+        logger.info("plagiarism external check: provider %r is active but has no key configured — skipping", active.provider)
+        return None
+
+    provider = active.provider
+    logger.info("plagiarism external check: provider %r is active, building real check callable", provider)
+
+    try:
+        api_key = decrypt_api_key(active.encrypted_key)
+    except Exception:
+        logger.exception("plagiarism external check: failed to decrypt stored key for provider %r — skipping", provider)
+        return None
+
+    def _check(text: str) -> dict:
+        logger.info("plagiarism external check: calling provider %r with %d characters of text", provider, len(text))
+
+        if provider == "winston":
+            from app.ai.winston_plagiarism_client import run_winston_plagiarism_check
+
+            result = run_winston_plagiarism_check(api_key, text)
+        elif provider == "gptzero":
+            # GPTZero's API requires a paid plan (confirmed — its free tier
+            # is web-app-only, no API access at all) — not wired up yet
+            # since this project is currently using Winston AI's free tier
+            # instead. Activating "gptzero" in the admin panel with a real
+            # key would still need a client module built for it, matching
+            # winston_plagiarism_client.py's pattern, once there's budget.
+            result = {"status": "error", "error": f"No client implemented yet for provider {provider!r}"}
+        else:
+            result = {"status": "error", "error": f"Unknown provider {provider!r}"}
+
+        logger.info(
+            "plagiarism external check: provider %r returned status=%r (error=%r)",
+            provider, result.get("status"), result.get("error"),
+        )
+
+        log = ApiUsageLog(
+            provider=provider,
+            purpose="plagiarism_check",
+            success=result.get("status") == "complete",
+            response_time_ms=result.get("response_time_ms"),
+            error_message=result.get("error") if result.get("status") != "complete" else None,
+        )
+        db.add(log)
+        db.commit()
+
+        return result
+
+    return _check
+
+
 def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str) -> None:
     """Runs in a worker thread via FastAPI's BackgroundTasks. Uses
     database_module.SessionLocal() (late-bound attribute access, not a name
@@ -147,6 +278,7 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
     from app.ai.format_compliance_check import run_format_compliance_check
     from app.ai.grammar_check import run_grammar_check
     from app.ai.logical_consistency_check import run_logical_consistency_check
+    from app.ai.plagiarism_check import run_plagiarism_check
     from app.ai.table_figure_check import run_table_figure_check
     from app.core.gate_engine import evaluate_submission_gates
     from app.core.ws_manager import get_manager
@@ -195,6 +327,23 @@ def _run_ai_checks_and_store(submission_id: str, version_id: str, file_path: str
             # gate_engine.py's _logical_consistency_passes and
             # models/conferences.py's NEVER_HARD_GATE.
             ("logical_consistency", lambda: run_logical_consistency_check(file_path)),
+            # Plagiarism — self-submission always runs (phase 1, update43,
+            # free, no external dependency). External-literature comparison
+            # (phase 2, update45) runs too, IF an admin has configured and
+            # activated a provider via the admin panel — _build_external_
+            # plagiarism_check_fn returns None otherwise, and
+            # plagiarism_check.py's external_check_fn=None skips it
+            # entirely. Also NEVER_HARD_GATE — an automated similarity
+            # score is informational for reviewers, never grounds for
+            # auto-rejection on its own.
+            (
+                "plagiarism",
+                lambda: run_plagiarism_check(
+                    file_path,
+                    candidates=_fetch_plagiarism_candidates(db, submission_id),
+                    external_check_fn=_build_external_plagiarism_check_fn(db),
+                ),
+            ),
         ]
 
         for check_type, run_fn in checks_to_run:
@@ -250,7 +399,12 @@ async def create_submission(
     if conf is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conference not found")
 
-    sub = Submission(conference_id=payload.conference_id, researcher_id=user.id, title=payload.title)
+    sub = Submission(
+        conference_id=payload.conference_id,
+        researcher_id=user.id,
+        title=payload.title,
+        previously_rejected_disclosure=payload.previously_rejected_disclosure,
+    )
     db.add(sub)
     db.flush()
 
@@ -323,15 +477,160 @@ def my_submissions(user: User = Depends(require_role("researcher")), db: Session
     return db.query(Submission).filter(Submission.researcher_id == user.id).all()
 
 
+@router.post("/{submission_id}/submit-for-review", response_model=SubmissionOut)
+def submit_for_review(
+    submission_id: str,
+    user: User = Depends(require_role("researcher")),
+    db: Session = Depends(get_db),
+):
+    """update51 — the researcher-facing checkpoint the whole gate system
+    was missing: AI checks running clean (status "ai_review_passed") no
+    longer auto-advances to "in_human_review" on its own. The researcher
+    must review the results themselves and explicitly call this endpoint.
+    A hard-gate failure can never reach here successfully — the researcher
+    must revise (resubmit a new version, which re-runs checks) and try
+    again, exactly as requested: "he cannot submit his paper... he can
+    again do some changes, then he can again apply."."""
+    sub = db.query(Submission).filter(Submission.id == submission_id).first()
+    if sub is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    if sub.researcher_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    if sub.status == "ai_review_hard_failed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This submission failed one or more required checks and cannot be sent for review. "
+                "Revise your paper and upload a new version to try again."
+            ),
+        )
+    if sub.status != "ai_review_passed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"This submission isn't ready to send for review yet (current status: {sub.status}).",
+        )
+
+    sub.status = "in_human_review"
+    db.commit()
+    db.refresh(sub)
+
+    import asyncio
+
+    from app.core.ws_manager import get_manager
+    asyncio.run(get_manager().publish(
+        f"conference:{sub.conference_id}:queue",
+        {"type": "submission.status_changed", "submission_id": submission_id, "submission_status": sub.status},
+    ))
+    asyncio.run(get_manager().publish(
+        f"submission:{submission_id}:updates",
+        {"type": "submission.status_changed", "submission_id": submission_id, "submission_status": sub.status},
+    ))
+
+    return sub
+
+
+@router.post("/{submission_id}/camera-ready", response_model=SubmissionOut)
+async def submit_camera_ready(
+    submission_id: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    copyright_transfer_file: UploadFile = File(None),
+    user: User = Depends(require_role("researcher")),
+    db: Session = Depends(get_db),
+):
+    """update51/52 — only reachable once Decision.decision == "accept" for
+    this paper (any acceptance — organizer's final decision, not the
+    per-reviewer recommendation). copyright_transfer_file is genuinely
+    optional per the product decision — its absence is not an error.
+
+    update52 — the camera-ready file is now stored as a real new
+    SubmissionVersion (same pattern as /resubmit), not just a bare path on
+    Submission. This is the actual fix for a real reported gap: the main
+    paper viewer always shows the LATEST version (history[-1] on the
+    frontend, ordered by version_number) — before this change, camera-ready
+    was invisible to that viewer entirely, so accepting a paper and
+    uploading its camera-ready version left the organizer still looking at
+    the original submitted draft with no way to see the real final one.
+    Making camera-ready a real version means it naturally becomes "the
+    latest version" and the existing viewer shows it with no frontend
+    changes needed. Deliberately does NOT schedule _run_ai_checks_and_store
+    — camera-ready is post-acceptance, re-running grammar/citation/etc.
+    checks on it serves no purpose. It DOES reuse _convert_to_pdf_and_store
+    on its own (self-contained, doesn't depend on the checks pipeline) so
+    a .docx camera-ready file is still viewable as a PDF."""
+    sub = db.query(Submission).filter(Submission.id == submission_id).first()
+    if sub is None or sub.researcher_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    decision = db.query(Decision).filter(Decision.submission_id == submission_id).first()
+    if decision is None or decision.decision != "accept":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Camera-ready submission is only available once this paper has been accepted.",
+        )
+
+    ALLOWED_EXTENSIONS = (".docx", ".pdf")
+    if not file.filename or not file.filename.lower().endswith(ALLOWED_EXTENSIONS):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only .docx or .pdf files are accepted")
+
+    latest = (
+        db.query(SubmissionVersion)
+        .filter(SubmissionVersion.submission_id == submission_id)
+        .order_by(SubmissionVersion.version_number.desc())
+        .first()
+    )
+    next_version = (latest.version_number + 1) if latest else 1
+
+    camera_ready_dir = os.path.join(_BACKEND_DIR, settings.upload_root, "submissions", submission_id, "camera-ready")
+    os.makedirs(camera_ready_dir, exist_ok=True)
+
+    dest_path = os.path.join(camera_ready_dir, file.filename)
+    with open(dest_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    version = SubmissionVersion(
+        submission_id=submission_id,
+        version_number=next_version,
+        original_filename=file.filename,
+        original_file_url=dest_path,
+    )
+    db.add(version)
+
+    sub.camera_ready_file_url = dest_path
+
+    if copyright_transfer_file is not None and copyright_transfer_file.filename:
+        copyright_dest = os.path.join(camera_ready_dir, copyright_transfer_file.filename)
+        with open(copyright_dest, "wb") as f:
+            shutil.copyfileobj(copyright_transfer_file.file, f)
+        sub.copyright_transfer_file_url = copyright_dest
+
+    from datetime import datetime, timezone
+    sub.camera_ready_uploaded_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(sub)
+    db.refresh(version)
+
+    background_tasks.add_task(_convert_to_pdf_and_store, submission_id, version.id, dest_path)
+
+    return sub
+
+
 @router.get("/assigned", response_model=list[SubmissionOut])
 def assigned_submissions(user: User = Depends(require_role("reviewer")), db: Session = Depends(get_db)):
-    conf_ids = [
-        row.conference_id
-        for row in db.query(ConferenceReviewer).filter(ConferenceReviewer.reviewer_id == user.id).all()
+    """update51 — now returns only papers actually assigned to this
+    specific reviewer (SubmissionReviewerAssignment), not every submission
+    in every conference where they're merely a pool member. The name was
+    already "assigned" before this fix; the behavior now matches it."""
+    submission_ids = [
+        row.submission_id
+        for row in db.query(SubmissionReviewerAssignment)
+        .filter(SubmissionReviewerAssignment.reviewer_id == user.id)
+        .all()
     ]
-    if not conf_ids:
+    if not submission_ids:
         return []
-    return db.query(Submission).filter(Submission.conference_id.in_(conf_ids)).all()
+    return db.query(Submission).filter(Submission.id.in_(submission_ids)).all()
 
 
 @router.get("/{submission_id}", response_model=SubmissionOut)
@@ -375,7 +674,7 @@ async def resubmit(
     sub = db.query(Submission).filter(Submission.id == submission_id).first()
     if sub is None or sub.researcher_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
-    if sub.status != "revise_resubmit":
+    if sub.status not in ("revise_resubmit", "ai_review_hard_failed"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Submission is not in a resubmittable state (current status: {sub.status})",

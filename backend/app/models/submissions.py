@@ -29,6 +29,23 @@ class Submission(Base):
     created_at = Column(DateTime(timezone=True), default=_now)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
 
+    # update51 — manual cross-conference rejection disclosure. The
+    # researcher can optionally state, at submission time, that this paper
+    # was previously rejected elsewhere and why. Deliberately NOT automatic
+    # same-paper detection (that would need cross-conference similarity
+    # matching — a much larger, riskier build with real false-positive
+    # exposure); this is the simpler, honest, self-disclosed version, with
+    # automatic detection left as a real possible future upgrade.
+    previously_rejected_disclosure = Column(Text, nullable=True)
+
+    # update51 — camera-ready submission, only meaningful once Decision.decision
+    # == "accept". copyright_transfer_file_url is deliberately nullable —
+    # copyright transfer is optional per the product decision, not a hard
+    # requirement to complete the camera-ready step.
+    camera_ready_file_url = Column(String(1000), nullable=True)
+    copyright_transfer_file_url = Column(String(1000), nullable=True)
+    camera_ready_uploaded_at = Column(DateTime(timezone=True), nullable=True)
+
 
 class SubmissionVersion(Base):
     __tablename__ = "submission_versions"
@@ -72,6 +89,25 @@ class Decision(Base):
     decision = Column(String(32), nullable=False)
     notes = Column(Text, nullable=True)
     decided_at = Column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class SubmissionReviewerAssignment(Base):
+    """update51 — a specific paper assigned to a specific reviewer by the
+    conference organizer/co-admin. Deliberately separate from
+    ConferenceReviewer (conferences.py): that table is "this person is in
+    this conference's reviewer pool at all"; this table is "this specific
+    paper has been handed to this specific person to review". Before this
+    model existed, any pool member could review any submission in that
+    conference — reviews.py's _require_assigned_reviewer now checks BOTH."""
+    __tablename__ = "submission_reviewer_assignments"
+    __table_args__ = (
+        UniqueConstraint("submission_id", "reviewer_id", name="uq_assignment_submission_reviewer"),
+    )
+    id = Column(String(36), primary_key=True, default=_uuid)
+    submission_id = Column(String(36), ForeignKey("submissions.id"), nullable=False, index=True)
+    reviewer_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    assigned_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_now)
 
 
 class PDFAnnotation(Base):

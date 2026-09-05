@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     languagetool_url: str = "http://localhost:8010/v2/check"
     upload_root: str = "uploads"  # relative to backend/, real .docx bytes land here
 
+    # Admin panel (update44) — encrypts external plagiarism-provider API keys
+    # at rest. Deliberately separate from file_signing_secret/JWT keys, same
+    # reasoning as those already being independently rotatable from each
+    # other — an encryption-key rotation here shouldn't force a JWT or
+    # signed-URL rotation, and vice versa.
+    api_key_encryption_secret: str = "dev-only-change-in-production-admin-keys"
+
     log_level: str = "INFO"
     log_file: str = "../log.txt"
 

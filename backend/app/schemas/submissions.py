@@ -9,6 +9,10 @@ class SubmissionCreate(BaseModel):
     # Phase 1 item — for now the caller supplies a filename + URL directly.
     original_filename: str = Field(min_length=1, max_length=500)
     original_file_url: str = Field(min_length=1, max_length=1000)
+    # update51 — optional, manual cross-conference rejection disclosure (see
+    # Submission.previously_rejected_disclosure's comment in models/submissions.py
+    # for why this is manual rather than automatic same-paper detection).
+    previously_rejected_disclosure: Optional[str] = Field(default=None, max_length=5000)
 
 
 class SubmissionOut(BaseModel):
@@ -17,6 +21,9 @@ class SubmissionOut(BaseModel):
     researcher_id: str
     title: str
     status: str
+    previously_rejected_disclosure: Optional[str] = None
+    camera_ready_file_url: Optional[str] = None
+    copyright_transfer_file_url: Optional[str] = None
 
     class Config:
         from_attributes = True

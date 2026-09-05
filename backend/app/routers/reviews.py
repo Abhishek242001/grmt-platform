@@ -5,8 +5,15 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_role
 from app.models.conferences import Conference, ConferenceCoAdmin, ConferenceReviewer
 from app.models.core import User
-from app.models.submissions import Decision, Review, Submission
-from app.schemas.reviews import DecisionIn, DecisionOut, ReviewIn, ReviewOut
+from app.models.submissions import Decision, Review, Submission, SubmissionReviewerAssignment
+from app.schemas.reviews import (
+    AssignReviewerIn,
+    DecisionIn,
+    DecisionOut,
+    ReviewerAssignmentOut,
+    ReviewIn,
+    ReviewOut,
+)
 
 router = APIRouter(prefix="/api/submissions", tags=["reviews"])
 
@@ -19,7 +26,13 @@ def _get_submission_or_404(submission_id: str, db: Session) -> Submission:
 
 
 def _require_assigned_reviewer(submission: Submission, user: User, db: Session) -> None:
-    is_assigned = (
+    """update51 — now requires BOTH: still a pool member for this
+    conference (ConferenceReviewer — the invite), AND specifically
+    assigned to THIS paper (SubmissionReviewerAssignment — the
+    organizer's per-paper allocation). Before this change, any pool
+    member could review any submission in the conference; see
+    SubmissionReviewerAssignment's docstring in models/submissions.py."""
+    is_pool_member = (
         db.query(ConferenceReviewer)
         .filter(
             ConferenceReviewer.conference_id == submission.conference_id,
@@ -28,7 +41,16 @@ def _require_assigned_reviewer(submission: Submission, user: User, db: Session) 
         .first()
         is not None
     )
-    if not is_assigned:
+    is_assigned_this_paper = (
+        db.query(SubmissionReviewerAssignment)
+        .filter(
+            SubmissionReviewerAssignment.submission_id == submission.id,
+            SubmissionReviewerAssignment.reviewer_id == user.id,
+        )
+        .first()
+        is not None
+    )
+    if not (is_pool_member and is_assigned_this_paper):
         # 404, not 403 — same pattern used everywhere else: don't confirm the
         # submission exists to someone with no legitimate reason to know.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
@@ -97,6 +119,93 @@ def list_reviews(submission_id: str, user: User = Depends(get_current_user), db:
         return own
 
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+
+@router.post("/{submission_id}/assign-reviewer", response_model=ReviewerAssignmentOut, status_code=status.HTTP_201_CREATED)
+def assign_reviewer(
+    submission_id: str,
+    payload: AssignReviewerIn,
+    user: User = Depends(require_role("organizer", "platform_admin")),
+    db: Session = Depends(get_db),
+):
+    """update51 — the organizer/co-admin allocates a SPECIFIC paper to a
+    SPECIFIC reviewer. The reviewer must already be a pool member for this
+    conference (ConferenceReviewer) — this assigns from that existing
+    pool, it doesn't invite someone new to the conference."""
+    sub = _get_submission_or_404(submission_id, db)
+    if not _is_conference_organizer_or_admin(sub, user, db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    is_pool_member = (
+        db.query(ConferenceReviewer)
+        .filter(
+            ConferenceReviewer.conference_id == sub.conference_id,
+            ConferenceReviewer.reviewer_id == payload.reviewer_id,
+        )
+        .first()
+        is not None
+    )
+    if not is_pool_member:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That user is not in this conference's reviewer pool yet — invite them as a conference reviewer first.",
+        )
+
+    existing = (
+        db.query(SubmissionReviewerAssignment)
+        .filter(
+            SubmissionReviewerAssignment.submission_id == submission_id,
+            SubmissionReviewerAssignment.reviewer_id == payload.reviewer_id,
+        )
+        .first()
+    )
+    if existing:
+        return existing
+
+    assignment = SubmissionReviewerAssignment(
+        submission_id=submission_id, reviewer_id=payload.reviewer_id, assigned_by=user.id
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return assignment
+
+
+@router.get("/{submission_id}/assigned-reviewers", response_model=list[ReviewerAssignmentOut])
+def list_assigned_reviewers(
+    submission_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    sub = _get_submission_or_404(submission_id, db)
+    if not _is_conference_organizer_or_admin(sub, user, db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    return db.query(SubmissionReviewerAssignment).filter(SubmissionReviewerAssignment.submission_id == submission_id).all()
+
+
+@router.delete("/{submission_id}/assign-reviewer/{reviewer_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unassign_reviewer(
+    submission_id: str,
+    reviewer_id: str,
+    user: User = Depends(require_role("organizer", "platform_admin")),
+    db: Session = Depends(get_db),
+):
+    sub = _get_submission_or_404(submission_id, db)
+    if not _is_conference_organizer_or_admin(sub, user, db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    assignment = (
+        db.query(SubmissionReviewerAssignment)
+        .filter(
+            SubmissionReviewerAssignment.submission_id == submission_id,
+            SubmissionReviewerAssignment.reviewer_id == reviewer_id,
+        )
+        .first()
+    )
+    if assignment:
+        db.delete(assignment)
+        db.commit()
+    return None
 
 
 @router.post("/{submission_id}/decision", response_model=DecisionOut)

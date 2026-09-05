@@ -127,6 +127,11 @@ def test_assigned_reviewer_can_view_submission(client):
     r = _submit(client, res_token, conf_id, title="Paper")
     sub_id = r.json()["id"]
 
+    # update51 — pool membership alone is no longer sufficient; this
+    # reviewer must also be specifically assigned to THIS paper.
+    rev_id = client.get("/api/auth/me", headers=_auth(rev_token)).json()["id"]
+    client.post(f"/api/submissions/{sub_id}/assign-reviewer", json={"reviewer_id": rev_id}, headers=_auth(org_token))
+
     r = client.get(f"/api/submissions/{sub_id}", headers=_auth(rev_token))
     assert r.status_code == 200
 
@@ -185,6 +190,52 @@ def test_resubmit_requires_revise_resubmit_status(client):
         headers=_auth(res_token),
     )
     assert r.status_code == 400
+
+
+def test_resubmit_allowed_from_ai_review_hard_failed(client, monkeypatch):
+    """update51 — the real gap this closes: before this fix, a submission
+    stuck at "ai_review_hard_failed" had NO path to resubmit at all (only
+    "revise_resubmit" was accepted), directly contradicting the intended
+    flow: a researcher whose paper fails a hard gate must be able to
+    revise and try again, not get permanently stuck."""
+
+    def fake_post(url, data=None, timeout=None):
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {"matches": []}
+
+        return FakeResponse()
+
+    import app.ai.grammar_check as grammar_check_module
+    monkeypatch.setattr(grammar_check_module.httpx, "post", fake_post)
+
+    org_token = _signup(client, "org@example.com", role="organizer")
+    conf_id = _make_conference(client, org_token)
+    res_token = _signup(client, "res@example.com", role="researcher")
+    r = _submit(client, res_token, conf_id)
+    sub_id = r.json()["id"]
+
+    from app.core import database as database_module
+    from app.models.submissions import Submission
+    db = database_module.SessionLocal()
+    try:
+        sub = db.query(Submission).filter(Submission.id == sub_id).first()
+        sub.status = "ai_review_hard_failed"
+        db.commit()
+    finally:
+        db.close()
+
+    docx_bytes = _make_docx_bytes(["Revised content addressing the hard-gate failure."])
+    r = client.post(
+        f"/api/submissions/{sub_id}/resubmit",
+        files={"file": ("v2.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        headers=_auth(res_token),
+    )
+    assert r.status_code == 200
+    assert r.json()["version_number"] == 2
 
 
 def test_other_researcher_cannot_resubmit_someone_elses_paper(client):
@@ -260,7 +311,7 @@ def test_resubmit_with_real_file_creates_new_version_and_reruns_checks(client, m
     assert submission["title"] == "Revised Paper Title"
     # "processing" only means something now that a real background task
     # actually resolves it — confirmed below, not just asserted here.
-    assert submission["status"] in ("processing", "ai_review_hard_failed", "in_human_review")
+    assert submission["status"] in ("processing", "ai_review_hard_failed", "ai_review_passed")
 
     r = client.get(f"/api/submissions/{sub_id}/history", headers=_auth(res_token))
     history = r.json()
@@ -268,8 +319,8 @@ def test_resubmit_with_real_file_creates_new_version_and_reruns_checks(client, m
 
     r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
     reports = r.json()
-    assert len(reports) == 6  # the real checks actually ran again on the new version
-    assert set(r["check_type"] for r in reports) == {"grammar", "format", "table_figure", "ai_text", "citation", "logical_consistency"}
+    assert len(reports) == 7  # the real checks actually ran again on the new version
+    assert set(r["check_type"] for r in reports) == {"grammar", "format", "table_figure", "ai_text", "citation", "logical_consistency", "plagiarism"}
 
 
 def test_reviewer_sees_assigned_submissions_only(client):
@@ -281,8 +332,13 @@ def test_reviewer_sees_assigned_submissions_only(client):
     client.post(f"/api/conferences/{conf1}/reviewers", json={"email": "rev@example.com"}, headers=_auth(org_token))
 
     res_token = _signup(client, "res@example.com", role="researcher")
-    _submit(client, res_token, conf1, title="In Assigned Conf")
+    sub1 = _submit(client, res_token, conf1, title="In Assigned Conf").json()["id"]
     _submit(client, res_token, conf2, title="Not Assigned")
+
+    # update51 — must be specifically assigned, not just a conference-pool
+    # member, to show up in "assigned" at all.
+    rev_id = client.get("/api/auth/me", headers=_auth(rev_token)).json()["id"]
+    client.post(f"/api/submissions/{sub1}/assign-reviewer", json={"reviewer_id": rev_id}, headers=_auth(org_token))
 
     r = client.get("/api/submissions/assigned", headers=_auth(rev_token))
     assert r.status_code == 200
@@ -370,21 +426,23 @@ def test_upload_runs_grammar_check_and_stores_ai_report(client, monkeypatch):
     # BackgroundTasks run synchronously within TestClient's request lifecycle,
     # so by the time this line runs, the grammar check AND the gate-evaluation
     # engine have both already completed. No gate rule is configured for this
-    # conference, so status should have moved to "in_human_review" — never
-    # "ai_review_passed" (only 1 of 7 checks exists), and never stuck on
-    # "processing" forever (the original gap this whole feature closes).
+    # conference, so status should have moved to "ai_review_passed" (update51
+    # — the researcher-confirm checkpoint before human review; a bare upload
+    # never auto-advances all the way to "in_human_review" anymore), and
+    # never stuck on "processing" forever (the original gap this whole
+    # feature closes).
     sub_check = client.get(f"/api/submissions/{sub_id}", headers=_auth(res_token))
-    assert sub_check.json()["status"] == "in_human_review"
+    assert sub_check.json()["status"] == "ai_review_passed"
 
     r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
     assert r.status_code == 200
     reports = r.json()
-    # Four reports now — grammar, format compliance, table/figure
-    # consistency, AND ai_text (AI-generated-content detection) all run
-    # per upload.
-    assert len(reports) == 6
+    # Seven reports now — grammar, format compliance, table/figure
+    # consistency, ai_text (AI-generated-content detection), citation,
+    # logical_consistency, and plagiarism (update45) all run per upload.
+    assert len(reports) == 7
     report_by_type = {r["check_type"]: r for r in reports}
-    assert set(report_by_type.keys()) == {"grammar", "format", "table_figure", "ai_text", "citation", "logical_consistency"}
+    assert set(report_by_type.keys()) == {"grammar", "format", "table_figure", "ai_text", "citation", "logical_consistency", "plagiarism"}
     assert report_by_type["grammar"]["status"] == "complete"
     assert report_by_type["format"]["status"] == "complete"
     assert report_by_type["table_figure"]["status"] == "complete"
@@ -489,7 +547,7 @@ def test_pdf_upload_also_runs_grammar_check(client, monkeypatch):
 
     r = client.get(f"/api/submissions/{sub_id}/ai-report", headers=_auth(res_token))
     reports = r.json()
-    assert len(reports) == 6
+    assert len(reports) == 7
     report_by_type = {r["check_type"]: r for r in reports}
     result = json.loads(report_by_type["grammar"]["result_json"])
     assert result["status"] == "complete"  # extraction + LanguageTool call both succeeded
