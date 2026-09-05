@@ -1,58 +1,115 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
+import { useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
+import AppHeader from '@/components/AppHeader';
+import ComingSoon from '@/components/ComingSoon';
 
-// master doc §6.1 / Figure 5 — one nav set per role. This starter codebase
-// renders the nav shell and a placeholder body; each linked page is a real
-// build task per the master doc §6 page specs (upload, AI report, gate
-// config, review detail, admin panel, etc.) — not yet implemented here.
-const NAV_BY_ROLE: Record<string, string[]> = {
-  researcher: ["Dashboard", "Browse Conferences", "Submission Upload", "Submission History", "Profile"],
-  reviewer: ["Assigned Papers", "Profile"],
-  organizer: ["Onboarding", "Gate Rules", "Reviewer Management", "Submission Queue", "Analytics", "Decisions"],
-  platform_admin: ["Model Usage", "False-Positive Rate", "Maintenance / Test Runs"],
+interface LinkCard {
+  title: string;
+  description: string;
+  href: string;
+}
+interface StubCard {
+  title: string;
+  description: string;
+}
+
+const RESEARCHER_LINKS: LinkCard[] = [
+  { title: 'Browse Conferences', description: 'Find and submit to open conferences matching your field.', href: '/conferences' },
+  { title: 'Submission History', description: 'Track every paper you have submitted, across all conferences.', href: '/submissions' },
+];
+const RESEARCHER_CARDS: StubCard[] = [
+  { title: 'Profile & Settings', description: 'Update your name, email preferences, and account details.' },
+];
+
+const ORGANIZER_LINKS: LinkCard[] = [
+  { title: 'Create a Conference', description: 'Set up a new conference and configure its publisher format.', href: '/conferences/new' },
+  { title: 'Your Conferences', description: 'Browse all conferences — yours show a Manage link.', href: '/conferences' },
+];
+
+const REVIEWER_LINKS: LinkCard[] = [
+  { title: 'Assigned Papers', description: 'Papers waiting on your review, sorted by deadline.', href: '/submissions' },
+];
+const REVIEWER_CARDS: StubCard[] = [
+  { title: 'Review History', description: 'Decisions you have already submitted.' },
+];
+
+const ADMIN_CARDS: StubCard[] = [
+  { title: 'Model Usage Dashboard', description: 'Live performance and usage stats across all 6 AI models.' },
+  { title: 'False-Positive Tracking', description: 'Monitor and tune AI check accuracy over time.' },
+];
+
+const LINKS_BY_ROLE: Record<string, LinkCard[]> = {
+  researcher: RESEARCHER_LINKS,
+  organizer: ORGANIZER_LINKS,
+  reviewer: REVIEWER_LINKS,
+};
+const CARDS_BY_ROLE: Record<string, StubCard[]> = {
+  researcher: RESEARCHER_CARDS,
+  organizer: [],
+  reviewer: REVIEWER_CARDS,
+  platform_admin: ADMIN_CARDS,
 };
 
+function LinkCardTile({ card }: { card: LinkCard }) {
+  return (
+    <Link
+      href={card.href}
+      className="block border border-[var(--color-line)] bg-white px-6 py-8 text-center transition hover:bg-[var(--color-accent-soft)]"
+    >
+      <span className="inline-block bg-[var(--color-accent-soft)] px-2.5 py-1 text-[0.68rem] font-extrabold uppercase tracking-wide text-[var(--color-accent)]">
+        Open
+      </span>
+      <h3 className="mt-3 text-lg font-extrabold">{card.title}</h3>
+      <p className="mx-auto mt-1.5 max-w-[32ch] text-sm text-[var(--color-ink)]/55">{card.description}</p>
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
-  const { isAuthenticated, role, loading, logout } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) router.push("/login");
-  }, [loading, isAuthenticated, router]);
+    if (!isLoading && !user) router.push('/login');
+  }, [isLoading, user, router]);
 
-  if (loading || !isAuthenticated || !role) {
-    return <main className="min-h-screen flex items-center justify-center text-gray-400">Loading…</main>;
+  if (isLoading || !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-[var(--color-ink)]/50">
+        Loading…
+      </div>
+    );
   }
 
-  const navItems = NAV_BY_ROLE[role] ?? [];
+  const links = LINKS_BY_ROLE[user.role] ?? [];
+  const stubs = CARDS_BY_ROLE[user.role] ?? [];
 
   return (
-    <main className="min-h-screen flex">
-      <aside className="w-64 border-r border-gray-200 p-4 flex flex-col">
-        <div className="font-semibold text-brand-primary mb-6">GRMT</div>
-        <nav className="flex-1 space-y-1">
-          {navItems.map((item) => (
-            <div key={item} className="px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-100 cursor-default">
-              {item}
-            </div>
-          ))}
-        </nav>
-        <button onClick={logout} className="text-sm text-gray-500 hover:text-gray-800 text-left">
-          Log out
-        </button>
-      </aside>
-      <section className="flex-1 p-8">
-        <h1 className="text-xl font-semibold mb-2">Welcome — role: {role}</h1>
-        <p className="text-gray-500 text-sm max-w-lg">
-          This is a placeholder dashboard body. Build out the pages listed in
-          the sidebar per the master build document §6 (Frontend Page
-          Specifications) — each has its own purpose, components, states, and
-          API calls already specified there.
+    <div className="min-h-screen bg-[var(--color-paper)]">
+      <AppHeader />
+
+      <main className="mx-auto max-w-[1360px] px-8 py-12">
+        <h1 className="font-display-bold text-4xl">
+          Welcome back, {user.full_name.split(' ')[0]}.
+        </h1>
+        <p className="mt-2 text-[var(--color-ink)]/55">
+          Phase 1 has your account, conferences, submissions, reviews, and gate rules fully working —
+          the panels marked &quot;Coming Soon&quot; light up as the rest ships.
         </p>
-      </section>
-    </main>
+
+        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
+          {links.map((card) => (
+            <LinkCardTile key={card.title} card={card} />
+          ))}
+          {stubs.map((card) => (
+            <ComingSoon key={card.title} title={card.title} description={card.description} />
+          ))}
+        </div>
+      </main>
+    </div>
   );
 }

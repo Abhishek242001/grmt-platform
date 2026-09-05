@@ -1,17 +1,4 @@
-"""
-Password hashing (Argon2id) and JWT (RS256) per development_rule.md §6.3.
-
-RS256 is asymmetric: only the private key signs, and any service (including
-future microservices) can verify with just the public key, without holding a
-shared secret. Keys are loaded from files at the paths in Settings; if those
-files don't exist (e.g. a fresh clone before `python scripts/generate_keys.py`
-has been run), an ephemeral in-memory keypair is generated instead so that
-`pytest` and local dev work immediately — this fallback is logged loudly and
-must never be relied on in a real deployment, since tokens signed with an
-ephemeral key become invalid on every process restart.
-"""
-import os
-import uuid
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -21,95 +8,71 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jose import JWTError, jwt
 
-from app.core.config import get_settings
+from app.core.config import settings
 
-settings = get_settings()
+logger = logging.getLogger("grmt.security")
+
 _hasher = PasswordHasher()
 
 
-# ---------------------------------------------------------------------------
-# Password hashing
-# ---------------------------------------------------------------------------
-
-def hash_password(plain_password: str) -> str:
-    return _hasher.hash(plain_password)
+def hash_password(password: str) -> str:
+    return _hasher.hash(password)
 
 
-def verify_password(plain_password: str, password_hash: str) -> bool:
+def verify_password(password: str, hashed: str) -> bool:
     try:
-        return _hasher.verify(password_hash, plain_password)
+        return _hasher.verify(hashed, password)
     except VerifyMismatchError:
         return False
-    except Exception:
-        return False
 
 
-# ---------------------------------------------------------------------------
-# RS256 key loading (with ephemeral dev fallback — see module docstring)
-# ---------------------------------------------------------------------------
+def _load_or_generate_keys() -> tuple[str, str]:
+    priv_path = Path(settings.jwt_private_key_path)
+    pub_path = Path(settings.jwt_public_key_path)
 
-def _generate_ephemeral_keypair():
+    if priv_path.exists() and pub_path.exists():
+        return priv_path.read_text(), pub_path.read_text()
+
+    # Defense-in-depth fallback so the app never hard-crashes on missing keys —
+    # but this MUST NOT be relied on. lightning_configure.sh runs generate_keys.py
+    # before first start specifically to avoid ever hitting this branch in practice.
+    logger.warning(
+        "[SECURITY WARNING] No persistent JWT keypair found at %s — generating an "
+        "EPHEMERAL in-memory keypair for THIS PROCESS ONLY. Every token issued now "
+        "will be invalid after the next restart. Run "
+        "`python scripts/generate_keys.py` from backend/ to fix this.",
+        priv_path,
+    )
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     private_pem = key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
-    )
+    ).decode()
     public_pem = key.public_key().public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
+    ).decode()
     return private_pem, public_pem
 
 
-def _load_keys():
-    priv_path = Path(settings.jwt_private_key_path)
-    pub_path = Path(settings.jwt_public_key_path)
-    if priv_path.exists() and pub_path.exists():
-        return priv_path.read_bytes(), pub_path.read_bytes()
-    # Ephemeral fallback for a fresh clone / CI / pytest — see docstring.
-    print(
-        "[SECURITY WARNING] JWT keys not found at configured paths — using an "
-        "ephemeral in-memory keypair. Tokens will not survive a process restart. "
-        "Run `python backend/scripts/generate_keys.py` and set the paths in .env "
-        "before deploying anywhere real. (development_rule.md §6.3)"
-    )
-    return _generate_ephemeral_keypair()
+_PRIVATE_KEY, _PUBLIC_KEY = _load_or_generate_keys()
 
 
-_PRIVATE_KEY, _PUBLIC_KEY = _load_keys()
-
-
-# ---------------------------------------------------------------------------
-# JWT issuance / verification
-# ---------------------------------------------------------------------------
-
-def create_access_token(user_id: str, role: str, expires_minutes: int | None = None) -> str:
-    expires_minutes = expires_minutes or settings.access_token_expire_minutes
-    now = datetime.now(timezone.utc)
-    payload = {
-        "sub": user_id,
-        "role": role,
-        "type": "access",
-        "iat": now,
-        "exp": now + timedelta(minutes=expires_minutes),
-        "jti": str(uuid.uuid4()),
-    }
+def create_access_token(subject: str, role: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+    payload = {"sub": subject, "role": role, "type": "access", "exp": expire}
     return jwt.encode(payload, _PRIVATE_KEY, algorithm=settings.jwt_algorithm)
 
 
-def create_refresh_token(user_id: str) -> str:
-    now = datetime.now(timezone.utc)
-    payload = {
-        "sub": user_id,
-        "type": "refresh",
-        "iat": now,
-        "exp": now + timedelta(minutes=settings.refresh_token_expire_minutes),
-        "jti": str(uuid.uuid4()),
-    }
+def create_refresh_token(subject: str) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+    payload = {"sub": subject, "type": "refresh", "exp": expire}
     return jwt.encode(payload, _PRIVATE_KEY, algorithm=settings.jwt_algorithm)
 
 
 def decode_token(token: str) -> dict:
-    """Raises jose.JWTError on invalid/expired token — callers catch this."""
-    return jwt.decode(token, _PUBLIC_KEY, algorithms=[settings.jwt_algorithm])
+    try:
+        return jwt.decode(token, _PUBLIC_KEY, algorithms=[settings.jwt_algorithm])
+    except JWTError as e:
+        raise ValueError("invalid or expired token") from e

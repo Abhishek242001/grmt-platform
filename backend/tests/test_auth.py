@@ -1,85 +1,76 @@
-from tests.conftest import auth_headers, signup_and_login
-
-
-def test_signup_creates_user(client):
-    resp = client.post(
+def _signup(client, email="researcher@example.com", password="Password1", role="researcher"):
+    return client.post(
         "/api/auth/signup",
-        json={"email": "a@example.com", "password": "testpass123", "role": "researcher", "name": "Ada"},
+        json={"email": email, "password": password, "full_name": "Test User", "role": role},
     )
+
+
+def test_signup_creates_user_and_returns_tokens(client):
+    resp = _signup(client)
     assert resp.status_code == 201
     body = resp.json()
-    assert body["email"] == "a@example.com"
-    assert body["role"] == "researcher"
-    assert body["email_verified"] is False
+    assert body["user"]["email"] == "researcher@example.com"
+    assert body["user"]["role"] == "researcher"
+    assert body["access_token"]
+    assert body["refresh_token"]
 
 
 def test_signup_duplicate_email_rejected(client):
-    client.post("/api/auth/signup", json={"email": "dup@example.com", "password": "testpass123", "role": "researcher", "name": "A"})
-    resp = client.post("/api/auth/signup", json={"email": "dup@example.com", "password": "testpass123", "role": "researcher", "name": "B"})
-    assert resp.status_code == 422
-    assert resp.json()["detail"]["error"]["code"] == "EMAIL_TAKEN"
+    _signup(client)
+    resp = _signup(client)
+    assert resp.status_code == 409
 
 
-def test_signup_rejects_invalid_role(client):
-    # Reviewer/platform_admin are invite-only per master doc §1.2/§1.10 — no self-serve signup path.
-    resp = client.post(
-        "/api/auth/signup",
-        json={"email": "sneaky@example.com", "password": "testpass123", "role": "platform_admin", "name": "X"},
-    )
+def test_signup_cannot_self_assign_platform_admin(client):
+    resp = _signup(client, role="platform_admin")
     assert resp.status_code == 422
 
 
-def test_login_succeeds_with_correct_credentials(client):
-    client.post("/api/auth/signup", json={"email": "login@example.com", "password": "testpass123", "role": "researcher", "name": "A"})
-    resp = client.post("/api/auth/login", json={"email": "login@example.com", "password": "testpass123"})
+def test_signup_weak_password_rejected(client):
+    resp = _signup(client, password="allletters")
+    assert resp.status_code == 422
+
+
+def test_login_with_correct_credentials(client):
+    _signup(client)
+    resp = client.post("/api/auth/login", json={"email": "researcher@example.com", "password": "Password1"})
     assert resp.status_code == 200
-    body = resp.json()
-    assert "access_token" in body and "refresh_token" in body
-    assert body["token_type"] == "bearer"
+    assert resp.json()["access_token"]
 
 
-def test_login_fails_with_wrong_password(client):
-    client.post("/api/auth/signup", json={"email": "wrongpw@example.com", "password": "testpass123", "role": "researcher", "name": "A"})
-    resp = client.post("/api/auth/login", json={"email": "wrongpw@example.com", "password": "WRONG"})
+def test_login_wrong_password_rejected(client):
+    _signup(client)
+    resp = client.post("/api/auth/login", json={"email": "researcher@example.com", "password": "WrongPass1"})
     assert resp.status_code == 401
-    assert resp.json()["detail"]["error"]["code"] == "INVALID_CREDENTIALS"
 
 
-def test_login_does_not_reveal_whether_email_exists(client):
-    """master doc §6.3 — generic message, do not confirm whether the account exists."""
-    resp = client.post("/api/auth/login", json={"email": "nonexistent@example.com", "password": "whatever"})
+def test_login_nonexistent_email_same_error_as_wrong_password(client):
+    resp = client.post("/api/auth/login", json={"email": "nobody@example.com", "password": "Password1"})
     assert resp.status_code == 401
-    assert resp.json()["detail"]["error"]["code"] == "INVALID_CREDENTIALS"
+    assert resp.json()["detail"] == "Invalid email or password"
+
+
+def test_me_requires_valid_token(client):
+    resp = client.get("/api/auth/me")
+    assert resp.status_code == 401
+
+    signup_resp = _signup(client)
+    token = signup_resp.json()["access_token"]
+    resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json()["email"] == "researcher@example.com"
 
 
 def test_refresh_token_issues_new_access_token(client):
-    client.post("/api/auth/signup", json={"email": "refresh@example.com", "password": "testpass123", "role": "researcher", "name": "A"})
-    login_resp = client.post("/api/auth/login", json={"email": "refresh@example.com", "password": "testpass123"})
-    refresh_token = login_resp.json()["refresh_token"]
+    signup_resp = _signup(client)
+    refresh_token = signup_resp.json()["refresh_token"]
     resp = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
     assert resp.status_code == 200
-    assert "access_token" in resp.json()
+    assert resp.json()["access_token"]
 
 
 def test_refresh_rejects_access_token_used_as_refresh(client):
-    client.post("/api/auth/signup", json={"email": "wrongtype@example.com", "password": "testpass123", "role": "researcher", "name": "A"})
-    login_resp = client.post("/api/auth/login", json={"email": "wrongtype@example.com", "password": "testpass123"})
-    access_token = login_resp.json()["access_token"]
+    signup_resp = _signup(client)
+    access_token = signup_resp.json()["access_token"]
     resp = client.post("/api/auth/refresh", json={"refresh_token": access_token})
     assert resp.status_code == 401
-
-
-def test_protected_endpoint_rejects_missing_token(client):
-    resp = client.get("/api/conferences")
-    assert resp.status_code == 401
-
-
-def test_protected_endpoint_rejects_garbage_token(client):
-    resp = client.get("/api/conferences", headers=auth_headers("not-a-real-jwt"))
-    assert resp.status_code == 401
-
-
-def test_protected_endpoint_accepts_valid_token(client):
-    token = signup_and_login(client, email="valid@example.com")
-    resp = client.get("/api/conferences", headers=auth_headers(token))
-    assert resp.status_code == 200

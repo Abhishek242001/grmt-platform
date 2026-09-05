@@ -1,61 +1,53 @@
 import os
 
-os.environ.setdefault("DATABASE_URL", "sqlite:///./test_grmt.db")
-os.environ.setdefault("LOG_FILE_PATH", "./test_log.txt")
-os.environ.setdefault("UPLOAD_DIR", "./test_uploads")
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["ENVIRONMENT"] = "test"
+os.environ["JWT_PRIVATE_KEY_PATH"] = "secrets/jwt_private.pem"
+os.environ["JWT_PUBLIC_KEY_PATH"] = "secrets/jwt_public.pem"
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
+import app.core.database as database_module
 from app.core.database import Base, get_db
-from app.core.config import get_settings
-import app.models  # noqa: F401 — register all models on Base.metadata
+from app.main import app
+
+engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Reassigning the module ATTRIBUTE (not a name some other module already
+# imported via `from ... import SessionLocal`) — anything that accesses
+# `database_module.SessionLocal()` at call time, including background tasks
+# that can't use Depends(get_db), picks up the test database too. This is
+# what closes the gap that `Depends(get_db)`-based overrides alone can't reach.
+database_module.SessionLocal = TestingSessionLocal
 
 
-@pytest.fixture(scope="function")
-def db_engine(tmp_path):
-    """Fresh SQLite file per test function — fully isolated, no cross-test state."""
-    db_path = tmp_path / "test.db"
-    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+@pytest.fixture(autouse=True)
+def _reset_db():
     Base.metadata.create_all(bind=engine)
-    yield engine
+    yield
     Base.metadata.drop_all(bind=engine)
 
 
-@pytest.fixture(scope="function")
-def db_session(db_engine):
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
-    session = TestingSessionLocal()
-    yield session
-    session.close()
+def _override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
-@pytest.fixture(scope="function")
-def client(db_engine):
-    from app.main import app
-
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
-
-    def override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+app.dependency_overrides[get_db] = _override_get_db
 
 
-def signup_and_login(client, email="user@example.com", password="testpass123", role="researcher", name="Test User"):
-    client.post("/api/auth/signup", json={"email": email, "password": password, "role": role, "name": name})
-    resp = client.post("/api/auth/login", json={"email": email, "password": password})
-    return resp.json()["access_token"]
-
-
-def auth_headers(token: str) -> dict:
-    return {"Authorization": f"Bearer {token}"}
+@pytest.fixture
+def client():
+    return TestClient(app)

@@ -1,24 +1,12 @@
-"""
-SQLAlchemy engine & session factory.
-
-Backend-agnostic on purpose: models avoid Postgres-only column types
-(JSONB, native ARRAY, pgcrypto's gen_random_uuid()) so the exact same
-models/migrations work against the SQLite dev default (DATABASE_URL unset)
-and against Postgres in every other environment (docker-compose, Lightning
-Studio dev backend, Render/Railway production — see the master build
-document §2.2.5 / §4). UUIDs are generated application-side with Python's
-uuid4() rather than a database function, which is portable across both.
-"""
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-from app.core.config import get_settings
+from app.core.config import settings
 
-settings = get_settings()
-
+# SQLite needs this flag for use with FastAPI's threaded dev server; Postgres ignores it.
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 
-engine = create_engine(settings.database_url, connect_args=connect_args)
+engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

@@ -1,39 +1,30 @@
-# Secrets — never commit real values (development_rule.md §6.3)
-.env
-backend/.env
-backend/secrets/
-*.pem
-
 # Python
-backend/.venv/
 __pycache__/
 *.pyc
-*.db
-backend/grmt_dev.db
-backend/test_grmt.db
+.venv/
+venv/
 
-# Logs — log.txt is a local/dev artifact, not something to version-control
-# (it will contain request IDs and timing data specific to your machine)
+# Node
+node_modules/
+.next/
+
+# Env & secrets
+.env
+.env.local
+backend/secrets/*.pem
+
+# Logs
+*.log
 log.txt
-log.txt.*
-backend/test_log.txt
 
-# Node / frontend
-frontend/node_modules/
-frontend/.next/
-frontend/out/
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
-# AI service model caches / large downloads
-ai-services/embeddings/.venv/
-ai-services/gpu-inference/.venv/
-ai-services/**/corpus.index
-**/*.gguf
-**/Binoculars/
-
-# corpus-builder output (large, regenerable — see corpus-builder/README.md)
-corpus-builder/output/
-
-# OS / editor
+# OS
 .DS_Store
-.vscode/
-.idea/
+backend/uploads/
+
+# Stray manual-test artifacts (recurring issue — see PROJECT_HANDOFF.md §5.6)
+/test_grammar_paper.*
